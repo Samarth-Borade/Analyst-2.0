@@ -67,7 +67,20 @@ export function PromptBar() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to process prompt");
+        let errorMessage = `Failed to process prompt (HTTP ${response.status})`;
+        try {
+          const bodyText = await response.text();
+          try {
+            const bodyJson = JSON.parse(bodyText);
+            errorMessage = bodyJson?.details || bodyJson?.error || errorMessage;
+          } catch {
+            if (bodyText?.trim()) errorMessage = bodyText;
+          }
+        } catch {
+          // ignore
+        }
+        console.error("/api/prompt error:", errorMessage);
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -116,7 +129,11 @@ export function PromptBar() {
       setAiMessage(result.message || "Changes applied successfully!");
       setPrompt("");
     } catch (error) {
-      setAiMessage("Sorry, I couldn't process that request. Please try again.");
+      setAiMessage(
+        error instanceof Error
+          ? error.message
+          : "Sorry, I couldn't process that request. Please try again."
+      );
     } finally {
       setIsProcessing(false);
     }

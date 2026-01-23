@@ -66,7 +66,21 @@ export function FileUpload({ onAnalysisComplete }: FileUploadProps) {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to analyze data");
+          let errorMessage = `Failed to analyze data (HTTP ${response.status})`;
+          try {
+            const bodyText = await response.text();
+            try {
+              const bodyJson = JSON.parse(bodyText);
+              errorMessage =
+                bodyJson?.details || bodyJson?.error || errorMessage;
+            } catch {
+              if (bodyText?.trim()) errorMessage = bodyText;
+            }
+          } catch {
+            // ignore
+          }
+          console.error("/api/analyze error:", errorMessage);
+          throw new Error(errorMessage);
         }
 
         const result = await response.json();
