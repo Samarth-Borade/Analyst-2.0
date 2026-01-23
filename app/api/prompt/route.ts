@@ -129,6 +129,17 @@ function extractJSON(text: string): string {
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.GROQ_API_KEY) {
+      return Response.json(
+        {
+          error: "Missing GROQ_API_KEY",
+          details:
+            "Set GROQ_API_KEY in Vercel Project Settings → Environment Variables and redeploy.",
+        },
+        { status: 500 }
+      );
+    }
+
     const { prompt, currentDashboard, schema } = await req.json();
 
     // Find all table charts in the current dashboard

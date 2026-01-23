@@ -61,6 +61,17 @@ function extractJSON(text: string): string {
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.GROQ_API_KEY) {
+      return Response.json(
+        {
+          error: "Missing GROQ_API_KEY",
+          details:
+            "Set GROQ_API_KEY in Vercel Project Settings → Environment Variables and redeploy.",
+        },
+        { status: 500 }
+      );
+    }
+
     const { schema, sampleData } = await req.json();
 
     const prompt = `You are an expert data analyst. Based on the following dataset schema and sample data, generate an optimal dashboard configuration.
@@ -126,13 +137,28 @@ Return a valid dashboard configuration JSON with clear page names and a summary 
     // Extract JSON from potential markdown code blocks
     const cleanedText = extractJSON(text);
     
-    // Parse the JSON response
-    const result = JSON.parse(cleanedText);
-    return Response.json(result);
+    try {
+      const result = JSON.parse(cleanedText);
+      return Response.json(result);
+    } catch (parseError) {
+      console.error("Failed to parse model JSON:", parseError);
+      console.error("Model output preview:", cleanedText.slice(0, 500));
+      return Response.json(
+        {
+          error: "Model returned invalid JSON",
+          details:
+            parseError instanceof Error ? parseError.message : "Unknown parse error",
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Analysis error:", error);
     return Response.json(
-      { error: "Failed to analyze data" },
+      {
+        error: "Failed to analyze data",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
