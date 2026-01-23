@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import type { ChartConfig } from "@/lib/store";
 import { useMemo } from "react";
 
@@ -131,15 +132,12 @@ export function MapChartComponent({ config, data }: MapChartProps) {
   }
 
   const isBubbleMap = config.type === "bubble-map" || config.type === "map";
+  const titlePosition = config.titlePosition || "top";
 
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <div className="relative w-full h-[200px] bg-muted/20 rounded-lg overflow-hidden">
           <svg viewBox="0 0 800 500" className="w-full h-full">
             {/* US outline simplified */}
@@ -229,6 +227,7 @@ export function MapChartComponent({ config, data }: MapChartProps) {
           </div>
         </div>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }

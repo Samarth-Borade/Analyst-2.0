@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronDown, Plus, Minus } from "lucide-react";
 import type { ChartConfig } from "@/lib/store";
@@ -91,14 +92,12 @@ export function MatrixComponent({ config, data }: MatrixComponentProps) {
     );
   }
 
+  const titlePosition = config.titlePosition || "top";
+
   return (
     <Card className="h-full bg-card border-border overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 overflow-auto h-[calc(100%-60px)]">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={`overflow-auto h-[calc(100%-60px)] ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
         <table className="w-full text-xs font-mono">
           <thead className="sticky top-0 bg-card z-10">
             <tr className="border-b border-border">
@@ -166,6 +165,7 @@ export function MatrixComponent({ config, data }: MatrixComponentProps) {
           </tbody>
         </table>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }

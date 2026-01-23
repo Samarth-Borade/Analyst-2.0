@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatNumber, calculateKPI } from "@/lib/data-utils";
 import type { ChartConfig } from "@/lib/store";
@@ -51,14 +52,12 @@ export function MultiRowCardComponent({ config, data }: MultiRowCardProps) {
     }
   }
 
+  const titlePosition = config.titlePosition || "top";
+
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <div className="grid gap-3">
           {metrics.map((metric, index) => (
             <div
@@ -101,6 +100,7 @@ export function MultiRowCardComponent({ config, data }: MultiRowCardProps) {
           ))}
         </div>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }
