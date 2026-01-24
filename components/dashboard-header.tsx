@@ -9,7 +9,7 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ onReset }: DashboardHeaderProps) {
-  const { theme, toggleTheme, fileName, aiMessage } = useDashboardStore();
+  const { theme, toggleTheme, fileName } = useDashboardStore();
 
   return (
     <header className="h-14 border-b border-border bg-card px-4 flex items-center justify-between">
@@ -27,12 +27,6 @@ export function DashboardHeader({ onReset }: DashboardHeaderProps) {
           </div>
         )}
       </div>
-
-      {aiMessage && (
-        <div className="hidden md:block max-w-md text-sm text-muted-foreground truncate px-4 font-mono">
-          {aiMessage}
-        </div>
-      )}
 
       <div className="flex items-center gap-2">
         <Button

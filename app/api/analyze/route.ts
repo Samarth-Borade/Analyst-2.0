@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { groq } from "@ai-sdk/groq";
 import { z } from "zod";
+import { estimateTokens, logTokenUsage } from "@/lib/llm-utils";
 
 const chartConfigSchema = z.object({
   id: z.string(),
@@ -30,6 +31,9 @@ const chartConfigSchema = z.object({
   yAxis: z.union([z.string(), z.array(z.string())]).optional(),
   groupBy: z.string().optional(),
   aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
+  // Trend data for KPI cards - LLM should analyze data to determine realistic trends
+  trend: z.enum(["up", "down", "flat"]).optional(),
+  trendValue: z.number().optional(),
   width: z.number(),
   height: z.number(),
   x: z.number(),
@@ -72,15 +76,24 @@ export async function POST(req: Request) {
       );
     }
 
-    const { schema, sampleData } = await req.json();
+    const { schema, sampleData, statistics } = await req.json();
 
-    const prompt = `You are an expert data analyst. Based on the following dataset schema and sample data, generate an optimal dashboard configuration.
+    // Build optimized context - prefer statistics over raw samples
+    const dataContext = statistics 
+      ? `Data Statistics (use these for insights):
+${JSON.stringify(statistics, null, 2)}
+
+Sample Data (3 representative rows):
+${JSON.stringify(sampleData?.slice(0, 3) || [], null, 2)}`
+      : `Sample Data (first 5 rows):
+${JSON.stringify(sampleData, null, 2)}`;
+
+    const prompt = `You are an expert data analyst. Based on the following dataset schema and statistics, generate an optimal dashboard configuration.
 
 Dataset Schema:
 ${JSON.stringify(schema, null, 2)}
 
-Sample Data (first 5 rows):
-${JSON.stringify(sampleData, null, 2)}
+${dataContext}
 
 Generate a dashboard with multiple pages:
 
@@ -97,7 +110,7 @@ Generate a dashboard with multiple pages:
    - "Trends" (if time series data exists)
 
 Available chart types:
-- kpi: Single value metric card
+- kpi: Single value metric card (IMPORTANT: Must include "trend" and "trendValue" properties)
 - bar: Vertical bar chart
 - clustered-bar: Multiple bars grouped by category
 - stacked-bar: Stacked bar chart
@@ -117,6 +130,13 @@ Available chart types:
 - table: Data table
 - matrix: Pivot table with drill-down
 
+IMPORTANT FOR KPI CARDS:
+- Every KPI card MUST include "trend" (one of: "up", "down", "flat") and "trendValue" (a number representing percentage change, e.g., 8.5 for 8.5%)
+- Analyze the data to determine realistic trend values based on the data patterns
+- If the data has time series, compare recent vs earlier periods to calculate actual trends
+- If no time comparison is possible, use data distribution insights to suggest realistic trends
+- trendValue should be a reasonable percentage (typically 0-30%)
+
 Rules for page generation:
 - Each page MUST have a clear, descriptive name (not empty, not just "Page")
 - KPI charts should only have yAxis (the metric to display), no xAxis
@@ -129,9 +149,25 @@ Rules for page generation:
 
 Return a valid dashboard configuration JSON with clear page names and a summary explaining the dashboard. Return ONLY valid JSON, no markdown or explanation.`;
 
+    // Track token usage
+    const startTime = Date.now();
+    const inputTokens = estimateTokens(prompt);
+
     const { text } = await generateText({
       model: groq("llama-3.3-70b-versatile"),
       prompt,
+    });
+
+    // Log token usage
+    const outputTokens = estimateTokens(text);
+    logTokenUsage({
+      timestamp: Date.now(),
+      endpoint: '/api/analyze',
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      model: 'llama-3.3-70b-versatile',
+      latencyMs: Date.now() - startTime,
     });
 
     // Extract JSON from potential markdown code blocks
