@@ -11,7 +11,8 @@ import {
   Cell,
   ReferenceLine,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { aggregateData } from "@/lib/data-utils";
 import type { ChartConfig } from "@/lib/store";
 
@@ -55,14 +56,12 @@ export function WaterfallChartComponent({ config, data }: WaterfallChartProps) {
     isPositive: cumulative >= 0,
   });
 
+  const titlePosition = config.titlePosition || "top";
+
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={waterfallData} margin={{ left: 0, right: 0 }}>
             <CartesianGrid
@@ -115,6 +114,7 @@ export function WaterfallChartComponent({ config, data }: WaterfallChartProps) {
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }

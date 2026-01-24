@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import type { ChartConfig } from "@/lib/store";
 import { useMemo } from "react";
 
@@ -145,6 +146,8 @@ export function SankeyChartComponent({ config, data }: SankeyChartProps) {
     return { nodes: chartNodes, links: chartLinks };
   }, [data, sourceField, targetField, valueField]);
 
+  const titlePosition = config.titlePosition || "top";
+
   if (!sourceField || !targetField || !valueField) {
     return (
       <Card className="h-full bg-card border-border">
@@ -157,12 +160,8 @@ export function SankeyChartComponent({ config, data }: SankeyChartProps) {
 
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <svg width="100%" height={200} viewBox="0 0 420 200" className="font-mono">
           {/* Links */}
           {links.map((link, i) => {
@@ -226,6 +225,7 @@ export function SankeyChartComponent({ config, data }: SankeyChartProps) {
           ))}
         </svg>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }

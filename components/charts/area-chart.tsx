@@ -10,7 +10,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { getTimeSeriesData, aggregateData, aggregateMultipleMetrics } from "@/lib/data-utils";
 import type { ChartConfig } from "@/lib/store";
 
@@ -73,17 +74,14 @@ export function AreaChartComponent({ config, data }: AreaChartProps) {
   }
 
   const isStacked = config.type === "stacked-area";
+  const titlePosition = config.titlePosition || "top";
 
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <ResponsiveContainer width="100%" height={200}>
-          <RechartsAreaChart data={chartData} margin={{ left: 0, right: 0 }}>
+          <RechartsAreaChart data={chartData} margin={{ left: 0, right: 10, top: 20, bottom: 5 }}>
             <defs>
               {metrics.map((metric, index) => (
                 <linearGradient
@@ -124,6 +122,7 @@ export function AreaChartComponent({ config, data }: AreaChartProps) {
               tick={{ fontSize: 11 }}
               tickLine={false}
               axisLine={false}
+              domain={[0, 'dataMax + 10%']}
               tickFormatter={(value) =>
                 value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
               }
@@ -155,6 +154,7 @@ export function AreaChartComponent({ config, data }: AreaChartProps) {
           </RechartsAreaChart>
         </ResponsiveContainer>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }
