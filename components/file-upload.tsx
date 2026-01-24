@@ -6,7 +6,8 @@ import { useCallback, useState } from "react";
 import { Upload, FileSpreadsheet, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { parseCSV, analyzeData } from "@/lib/data-utils";
+import { parseCSV, analyzeData, generateDataStatistics, getSmartSample } from "@/lib/data-utils";
+import { getCachedStatistics, generateDataHash } from "@/lib/llm-utils";
 import { useDashboardStore } from "@/lib/store";
 import * as XLSX from "xlsx";
 
@@ -55,13 +56,30 @@ export function FileUpload({ onAnalysisComplete }: FileUploadProps) {
         setSchema(schema);
         setAiMessage("Analyzing your data and generating dashboard...");
 
+        // Generate hash for caching
+        const dataHash = generateDataHash(data);
+        
+        // Get cached statistics or compute new ones
+        const { data: statistics, fromCache } = getCachedStatistics(
+          `stats-${file.name}`,
+          dataHash,
+          () => generateDataStatistics(data)
+        );
+        
+        if (fromCache) {
+          console.log("[Cache] Using cached statistics for:", file.name);
+        }
+        
+        const smartSample = getSmartSample(data, 3); // Just 3 representative rows
+
         // Call AI to generate dashboard
         const response = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             schema,
-            sampleData: data.slice(0, 5),
+            sampleData: smartSample,
+            statistics, // Send statistics for better insights
           }),
         });
 

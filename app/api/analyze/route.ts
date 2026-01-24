@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { groq } from "@ai-sdk/groq";
 import { z } from "zod";
+import { estimateTokens, logTokenUsage } from "@/lib/llm-utils";
 
 const chartConfigSchema = z.object({
   id: z.string(),
@@ -75,15 +76,24 @@ export async function POST(req: Request) {
       );
     }
 
-    const { schema, sampleData } = await req.json();
+    const { schema, sampleData, statistics } = await req.json();
 
-    const prompt = `You are an expert data analyst. Based on the following dataset schema and sample data, generate an optimal dashboard configuration.
+    // Build optimized context - prefer statistics over raw samples
+    const dataContext = statistics 
+      ? `Data Statistics (use these for insights):
+${JSON.stringify(statistics, null, 2)}
+
+Sample Data (3 representative rows):
+${JSON.stringify(sampleData?.slice(0, 3) || [], null, 2)}`
+      : `Sample Data (first 5 rows):
+${JSON.stringify(sampleData, null, 2)}`;
+
+    const prompt = `You are an expert data analyst. Based on the following dataset schema and statistics, generate an optimal dashboard configuration.
 
 Dataset Schema:
 ${JSON.stringify(schema, null, 2)}
 
-Sample Data (first 5 rows):
-${JSON.stringify(sampleData, null, 2)}
+${dataContext}
 
 Generate a dashboard with multiple pages:
 
@@ -139,9 +149,25 @@ Rules for page generation:
 
 Return a valid dashboard configuration JSON with clear page names and a summary explaining the dashboard. Return ONLY valid JSON, no markdown or explanation.`;
 
+    // Track token usage
+    const startTime = Date.now();
+    const inputTokens = estimateTokens(prompt);
+
     const { text } = await generateText({
       model: groq("llama-3.3-70b-versatile"),
       prompt,
+    });
+
+    // Log token usage
+    const outputTokens = estimateTokens(text);
+    logTokenUsage({
+      timestamp: Date.now(),
+      endpoint: '/api/analyze',
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      model: 'llama-3.3-70b-versatile',
+      latencyMs: Date.now() - startTime,
     });
 
     // Extract JSON from potential markdown code blocks

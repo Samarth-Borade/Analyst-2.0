@@ -94,6 +94,26 @@ export function PromptBar() {
           }
           break;
 
+        case "update_all_charts":
+          // Bulk update: apply chartUpdate to all charts matching targetChartType across all pages
+          if (result.chartUpdate) {
+            const targetType = result.targetChartType;
+            let updatedCount = 0;
+            
+            for (const page of pages) {
+              for (const chart of page.charts) {
+                // If targetChartType is "all" or matches the chart type
+                if (targetType === "all" || chart.type === targetType) {
+                  updateChart(page.id, chart.id, result.chartUpdate);
+                  updatedCount++;
+                }
+              }
+            }
+            
+            console.log(`[Bulk Update] Updated ${updatedCount} charts of type "${targetType}"`);
+          }
+          break;
+
         case "add_chart":
           if (result.targetPageId && result.newChart) {
             addChart(result.targetPageId, result.newChart);

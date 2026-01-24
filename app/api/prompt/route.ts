@@ -1,6 +1,8 @@
 import { generateText } from "ai";
 import { groq } from "@ai-sdk/groq";
 import { z, ZodError } from "zod";
+import { compressDashboardForLLM } from "@/lib/data-utils";
+import { estimateTokens, logTokenUsage } from "@/lib/llm-utils";
 
 // Helper function to convert Zod errors to user-friendly messages
 function formatZodError(error: ZodError): string {
@@ -56,6 +58,7 @@ function formatZodError(error: ZodError): string {
 const updateSchema = z.object({
   action: z.enum([
     "update_chart",
+    "update_all_charts", // NEW: Bulk update all charts matching criteria
     "add_chart",
     "delete_chart",
     "add_page",
@@ -68,6 +71,29 @@ const updateSchema = z.object({
   ]),
   targetChartId: z.string().optional(),
   targetPageId: z.string().optional(),
+  // NEW: For bulk operations - filter by chart type
+  targetChartType: z.enum([
+    "kpi",
+    "bar",
+    "stacked-bar",
+    "clustered-bar",
+    "line",
+    "area",
+    "stacked-area",
+    "scatter",
+    "bubble",
+    "pie",
+    "donut",
+    "heatmap",
+    "treemap",
+    "waterfall",
+    "funnel",
+    "gauge",
+    "radar",
+    "table",
+    "matrix",
+    "all", // Target all chart types
+  ]).optional(),
   chartUpdate: z
     .object({
       type: z
@@ -207,6 +233,14 @@ export async function POST(req: Request) {
 
     const { prompt, currentDashboard, schema } = await req.json();
 
+    // Get the current page ID and name for context
+    const currentPageId = currentDashboard?.currentPageId;
+    const currentPage = currentDashboard?.pages?.find((p: { id: string }) => p.id === currentPageId);
+    const currentPageName = currentPage?.name || "Unknown";
+
+    // Compress dashboard for LLM context (reduces tokens significantly)
+    const compressedDashboard = compressDashboardForLLM(currentDashboard);
+
     // Find all table charts in the current dashboard
     const tableCharts: Array<{pageId: string; chartId: string; title: string}> = [];
     let allColumnNames: string[] = [];
@@ -225,16 +259,45 @@ export async function POST(req: Request) {
       }
     }
     
+    // Get charts on current page for quick reference
+    const currentPageCharts = currentPage?.charts?.map((c: { id: string; type: string; title: string }) => ({
+      id: c.id,
+      type: c.type,
+      title: c.title
+    })) || [];
+    
     // Extract all available column names from schema
     if (schema?.columns) {
       allColumnNames = schema.columns.map((col: { name: string }) => col.name);
     }
 
+    // Compress schema - only send column names and types, not full sample data
+    const compressedSchema = schema?.columns ? {
+      columns: schema.columns.map((col: { name: string; type: string; isMetric: boolean; isDimension: boolean }) => ({
+        name: col.name,
+        type: col.type,
+        isMetric: col.isMetric,
+        isDimension: col.isDimension,
+      })),
+      rowCount: schema.rowCount,
+    } : schema;
+
     const systemPrompt = `You are an AI assistant that helps users modify their data dashboards. 
 Based on the user's natural language request, determine what action to take and return the appropriate update configuration.
 
-Current Dashboard:
-${JSON.stringify(currentDashboard, null, 2)}
+IMPORTANT - CURRENT PAGE CONTEXT:
+- The user is currently viewing page: "${currentPageName}" (ID: ${currentPageId})
+- Charts on current page: ${currentPageCharts.length > 0 ? JSON.stringify(currentPageCharts) : "None"}
+
+CRITICAL RULE FOR PAGE CONTEXT:
+- If the user does NOT specify a page name (like "first page", "Overview page", "all pages"), then ALWAYS apply changes to the CURRENT PAGE ONLY (${currentPageId})
+- If user says "change bar chart color" without mentioning a page → target the bar chart on the CURRENT page "${currentPageName}"
+- If user says "change bar chart color on Overview page" → target the bar chart on the Overview page
+- If user says "change ALL bar charts" or "all pages" → use action "update_all_charts" (see below)
+- NEVER default to the first page unless the user explicitly mentions "first page" or the first page name
+
+Current Dashboard (all pages):
+${JSON.stringify(compressedDashboard, null, 2)}
 
 Available Table Charts:
 ${tableCharts.length > 0 ? JSON.stringify(tableCharts, null, 2) : "No table charts found"}
@@ -242,10 +305,12 @@ ${tableCharts.length > 0 ? JSON.stringify(tableCharts, null, 2) : "No table char
 Available Column Names (for sorting and filtering):
 ${allColumnNames.length > 0 ? allColumnNames.join(", ") : "No columns found"}
 
-Dataset Schema:
-${JSON.stringify(schema, null, 2)}
+Dataset Schema (compressed):
+${JSON.stringify(compressedSchema, null, 2)}
 
 User Request: "${prompt}"
+
+Remember: The user is on page "${currentPageName}" (${currentPageId}). Unless they specify another page, apply changes to THIS page.
 
 Analyze the request and return a JSON object with the following structure:
 
@@ -283,6 +348,20 @@ For updating a chart (including sorting and filtering):
   },
   "message": "Updated chart and sorted by column_name in descending order"
 }
+
+BULK UPDATE - For updating ALL charts of a type across ALL pages:
+When user says "all bar charts", "every pie chart", "all charts", use this action:
+{
+  "action": "update_all_charts",
+  "targetChartType": "bar",
+  "chartUpdate": {
+    "colors": ["#3b82f6"]
+  },
+  "message": "Updated all bar charts to blue across all pages"
+}
+- Use targetChartType: "bar", "line", "pie", "kpi", etc. to target specific chart types
+- Use targetChartType: "all" to update every single chart
+- This will apply the chartUpdate to ALL matching charts on ALL pages
 
 Example - For resizing a chart:
 {
@@ -456,11 +535,32 @@ MOVING/REORDERING CHARTS:
 - Colors as hex: "#7c3aed" (purple), "#ef4444" (red), "#22c55e" (green), "#3b82f6" (blue), "#f59e0b" (amber), "#06b6d4" (cyan)
 - Always include a friendly "message" field
 
+FINAL REMINDER - PAGE CONTEXT:
+⚠️ The user is currently on page "${currentPageName}" (ID: ${currentPageId}).
+⚠️ Unless the user EXPLICITLY mentions another page by name (e.g., "on Overview page", "on the first page", "on all pages"), you MUST use targetPageId: "${currentPageId}"
+⚠️ If there are multiple charts of the same type on the current page, pick the first one or ask for clarification in the message.
+
 Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
+
+    // Track token usage
+    const startTime = Date.now();
+    const inputTokens = estimateTokens(systemPrompt);
 
     const { text } = await generateText({
       model: groq("llama-3.3-70b-versatile"),
       prompt: systemPrompt,
+    });
+
+    // Log token usage
+    const outputTokens = estimateTokens(text);
+    logTokenUsage({
+      timestamp: Date.now(),
+      endpoint: '/api/prompt',
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      model: 'llama-3.3-70b-versatile',
+      latencyMs: Date.now() - startTime,
     });
 
     console.log("AI Response:", text); // Debug log
