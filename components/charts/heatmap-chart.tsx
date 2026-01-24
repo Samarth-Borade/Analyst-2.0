@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { aggregateData } from "@/lib/data-utils";
 import type { ChartConfig } from "@/lib/store";
 
@@ -48,14 +49,12 @@ export function HeatmapChartComponent({ config, data }: HeatmapChartProps) {
     });
   });
 
+  const titlePosition = config.titlePosition || "top";
+
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 overflow-auto">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={`overflow-auto ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
         <div className="flex gap-1">
           {/* Y-axis labels */}
           <div className="flex flex-col gap-1 pr-2">
@@ -109,6 +108,7 @@ export function HeatmapChartComponent({ config, data }: HeatmapChartProps) {
           </div>
         </div>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }

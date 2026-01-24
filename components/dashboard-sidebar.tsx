@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   LayoutDashboard,
   Plus,
@@ -17,7 +17,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { useDashboardStore } from "@/lib/store";
 
@@ -36,6 +41,25 @@ export function DashboardSidebar() {
 
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [truncatedPages, setTruncatedPages] = useState<Set<string>>(new Set());
+  const pageNameRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
+
+  // Check which page names are truncated
+  useEffect(() => {
+    const checkTruncation = () => {
+      const newTruncated = new Set<string>();
+      pageNameRefs.current.forEach((el, pageId) => {
+        if (el && el.scrollWidth > el.clientWidth) {
+          newTruncated.add(pageId);
+        }
+      });
+      setTruncatedPages(newTruncated);
+    };
+    
+    checkTruncation();
+    window.addEventListener("resize", checkTruncation);
+    return () => window.removeEventListener("resize", checkTruncation);
+  }, [pages]);
 
   const handleAddPage = () => {
     const newPage = {
@@ -104,16 +128,17 @@ export function DashboardSidebar() {
   }
 
   return (
-    <div className="w-64 h-full bg-sidebar border-r border-sidebar-border flex flex-col">
+    <TooltipProvider delayDuration={300}>
+    <div className="w-64 h-full bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
+      <div className="p-4 border-b border-sidebar-border flex items-center justify-between flex-shrink-0">
         <h2 className="font-semibold text-sidebar-foreground font-mono">Dashboard</h2>
         <Button variant="ghost" size="icon" onClick={toggleSidebar}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {/* Pages Section */}
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
@@ -180,7 +205,32 @@ export function DashboardSidebar() {
                   </div>
                 ) : (
                   <>
-                    <span className="flex-1 truncate text-sm font-mono">{page.name}</span>
+                    {truncatedPages.has(page.id) ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span 
+                            ref={(el) => {
+                              if (el) pageNameRefs.current.set(page.id, el);
+                            }}
+                            className="flex-1 truncate text-sm font-mono"
+                          >
+                            {page.name}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="font-mono">
+                          {page.name}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span 
+                        ref={(el) => {
+                          if (el) pageNameRefs.current.set(page.id, el);
+                        }}
+                        className="flex-1 truncate text-sm font-mono"
+                      >
+                        {page.name}
+                      </span>
+                    )}
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
                       <Button
                         variant="ghost"
@@ -240,7 +290,7 @@ export function DashboardSidebar() {
             </div>
 
             {/* Dimensions */}
-            <div>
+            <div className="pb-24">
               <h4 className="text-xs text-muted-foreground mb-2 font-mono">Dimensions</h4>
               <div className="space-y-1">
                 {schema.columns
@@ -258,7 +308,8 @@ export function DashboardSidebar() {
             </div>
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
+    </TooltipProvider>
   );
 }

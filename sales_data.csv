@@ -1,0 +1,50 @@
+Product,Category,Region,Sales,Quantity,Profit Margin,Cost,Discount,Date,Customer Segment,Salesperson,Rating,Returns,Shipping Days,Payment Method,Channel
+Laptop Pro,Electronics,North,1500,15,0.25,1125,0.05,2025-01-15,Enterprise,John Smith,4.5,1,3,Credit Card,Online
+Laptop Basic,Electronics,North,950,22,0.22,741,0.10,2025-01-18,Consumer,John Smith,4.2,2,4,PayPal,Online
+Phone X,Electronics,North,800,40,0.20,640,0.08,2025-02-10,Consumer,Sarah Lee,4.7,3,2,Credit Card,Retail
+Phone Y,Electronics,South,650,35,0.18,533,0.12,2025-02-14,Small Business,Mike Chen,4.3,2,3,Debit Card,Online
+Tablet Pro,Electronics,North,400,25,0.22,312,0.05,2025-03-05,Enterprise,John Smith,4.6,1,2,Credit Card,Online
+Tablet Mini,Electronics,West,320,30,0.19,259,0.15,2025-03-12,Consumer,Emma Wilson,4.1,4,5,PayPal,Online
+Monitor 27,Electronics,West,300,12,0.18,246,0.00,2025-04-01,Enterprise,Sarah Lee,4.4,0,3,Wire Transfer,Retail
+Monitor 32,Electronics,East,450,18,0.21,356,0.05,2025-04-08,Small Business,Mike Chen,4.8,1,4,Credit Card,Online
+Keyboard Mech,Electronics,West,85,50,0.25,64,0.10,2025-05-15,Consumer,Emma Wilson,4.9,2,2,Credit Card,Online
+Keyboard Basic,Electronics,South,35,80,0.15,30,0.20,2025-05-20,Consumer,John Smith,3.8,5,3,Debit Card,Retail
+Mouse Wireless,Electronics,West,45,75,0.18,37,0.05,2025-06-01,Consumer,Sarah Lee,4.3,3,2,PayPal,Online
+Mouse Gaming,Electronics,North,75,55,0.22,59,0.08,2025-06-10,Consumer,Mike Chen,4.7,1,2,Credit Card,Online
+Printer Laser,Electronics,South,350,10,0.30,245,0.00,2025-07-05,Enterprise,Emma Wilson,4.2,0,5,Wire Transfer,Retail
+Printer Inkjet,Electronics,East,120,25,0.25,90,0.15,2025-07-12,Small Business,John Smith,3.9,2,4,Credit Card,Online
+Executive Desk,Furniture,South,800,7,0.35,520,0.00,2025-01-20,Enterprise,Sarah Lee,4.6,0,7,Wire Transfer,Retail
+Standing Desk,Furniture,North,650,12,0.32,442,0.05,2025-02-25,Small Business,Mike Chen,4.8,1,6,Credit Card,Online
+Office Chair,Furniture,South,300,30,0.40,180,0.10,2025-03-15,Consumer,Emma Wilson,4.4,3,5,PayPal,Online
+Gaming Chair,Furniture,West,450,18,0.38,279,0.08,2025-04-20,Consumer,John Smith,4.7,2,4,Credit Card,Online
+Bookcase Oak,Furniture,East,180,20,0.38,112,0.05,2025-05-25,Consumer,Sarah Lee,4.1,1,8,Debit Card,Retail
+Bookcase Metal,Furniture,North,150,25,0.35,98,0.12,2025-06-15,Small Business,Mike Chen,4.3,2,6,Credit Card,Online
+Filing Cabinet,Furniture,South,220,15,0.33,147,0.00,2025-07-01,Enterprise,Emma Wilson,4.0,0,7,Wire Transfer,Retail
+Pen Set,Stationery,East,8,200,0.12,7,0.25,2025-01-08,Consumer,John Smith,3.5,10,2,Cash,Retail
+Notebook Pack,Stationery,East,25,500,0.15,21,0.20,2025-02-12,Consumer,Sarah Lee,4.0,15,2,Debit Card,Retail
+Markers,Stationery,West,12,150,0.18,10,0.15,2025-03-18,Consumer,Mike Chen,4.2,8,3,Cash,Retail
+Sticky Notes,Stationery,North,6,300,0.10,5,0.30,2025-04-22,Consumer,Emma Wilson,3.8,12,2,Cash,Retail
+Headphones Pro,Electronics,North,175,60,0.28,126,0.05,2025-08-01,Consumer,John Smith,4.8,2,2,Credit Card,Online
+Headphones Basic,Electronics,South,55,90,0.20,44,0.15,2025-08-10,Consumer,Sarah Lee,4.1,5,3,PayPal,Online
+Smartwatch Elite,Electronics,West,350,18,0.30,245,0.05,2025-08-15,Consumer,Mike Chen,4.9,1,2,Credit Card,Online
+Smartwatch Sport,Electronics,East,200,28,0.25,150,0.10,2025-08-20,Consumer,Emma Wilson,4.5,2,3,Debit Card,Online
+Television 55,Electronics,West,1200,24,0.28,864,0.05,2025-09-01,Consumer,John Smith,4.6,1,5,Credit Card,Retail
+Television 65,Electronics,North,1800,15,0.30,1260,0.00,2025-09-10,Enterprise,Sarah Lee,4.8,0,6,Wire Transfer,Retail
+Camera DSLR,Electronics,South,900,17,0.32,612,0.05,2025-09-15,Consumer,Mike Chen,4.7,1,3,Credit Card,Online
+Camera Mirrorless,Electronics,West,1100,12,0.35,715,0.00,2025-09-20,Small Business,Emma Wilson,4.9,0,3,Wire Transfer,Online
+Speakers Bluetooth,Electronics,South,120,45,0.32,82,0.10,2025-10-01,Consumer,John Smith,4.4,3,2,PayPal,Online
+Speakers Home,Electronics,East,350,20,0.28,252,0.05,2025-10-10,Consumer,Sarah Lee,4.6,1,4,Credit Card,Retail
+Router Pro,Electronics,East,150,32,0.35,98,0.08,2025-10-15,Small Business,Mike Chen,4.3,2,2,Credit Card,Online
+Router Basic,Electronics,South,65,50,0.28,47,0.15,2025-10-20,Consumer,Emma Wilson,4.0,4,3,Debit Card,Online
+Projector HD,Electronics,East,550,8,0.22,429,0.00,2025-11-01,Enterprise,John Smith,4.5,0,5,Wire Transfer,Retail
+Projector 4K,Electronics,North,950,5,0.25,713,0.05,2025-11-10,Enterprise,Sarah Lee,4.8,0,5,Wire Transfer,Online
+Scanner Flatbed,Electronics,North,280,22,0.24,213,0.08,2025-11-15,Small Business,Mike Chen,4.2,1,4,Credit Card,Online
+Scanner Portable,Electronics,West,180,30,0.26,133,0.12,2025-11-20,Consumer,Emma Wilson,4.4,2,3,PayPal,Online
+Webcam HD,Electronics,North,85,65,0.30,60,0.10,2025-12-01,Consumer,John Smith,4.5,3,2,Credit Card,Online
+Webcam 4K,Electronics,East,150,40,0.32,102,0.05,2025-12-05,Small Business,Sarah Lee,4.7,1,2,Credit Card,Online
+USB Hub,Electronics,West,35,120,0.28,25,0.15,2025-12-10,Consumer,Mike Chen,4.1,6,2,PayPal,Online
+External SSD,Electronics,South,180,55,0.30,126,0.08,2025-12-15,Consumer,Emma Wilson,4.8,2,2,Credit Card,Online
+Desk Lamp,Furniture,North,45,80,0.40,27,0.10,2025-12-18,Consumer,John Smith,4.3,4,3,Debit Card,Online
+Monitor Arm,Furniture,West,120,35,0.35,78,0.05,2025-12-20,Small Business,Sarah Lee,4.6,1,4,Credit Card,Online
+Whiteboard,Stationery,East,85,25,0.28,61,0.08,2025-12-22,Enterprise,Mike Chen,4.2,0,5,Wire Transfer,Retail
+Planner,Stationery,South,18,180,0.22,14,0.20,2025-12-25,Consumer,Emma Wilson,4.0,8,2,Cash,Retail

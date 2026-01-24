@@ -87,6 +87,13 @@ export interface ChartConfig {
   sortOrder?: "asc" | "desc";
   filterColumn?: string;
   filterValues?: string[];
+  // Trend data for KPI cards (should come from LLM analysis)
+  trend?: "up" | "down" | "flat";
+  trendValue?: number;
+  // Columns to display in table/matrix (if not set, show all columns)
+  columns?: string[];
+  // Title position: top or bottom (default: top)
+  titlePosition?: "top" | "bottom";
   width: number;
   height: number;
   x: number;
@@ -97,6 +104,8 @@ export interface DashboardPage {
   id: string;
   name: string;
   charts: ChartConfig[];
+  // Optional centered page title
+  showTitle?: boolean;
 }
 
 export interface FilterState {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -108,16 +109,15 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
     );
   }
 
+  const titlePosition = config.titlePosition || "top";
+  const title = config.title || filterColumn;
+
   // Dropdown Slicer
   if (slicerType === "dropdown-slicer") {
     return (
       <Card className="h-full bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-            {config.title || filterColumn}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
+        <ChartTitleHeader title={title} position={titlePosition} />
+        <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
           <Select
             value={selectedValues[0] || "all"}
             onValueChange={handleDropdownChange}
@@ -135,6 +135,7 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
             </SelectContent>
           </Select>
         </CardContent>
+        <ChartTitleFooter title={title} position={titlePosition} />
       </Card>
     );
   }
@@ -143,12 +144,8 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
   if (slicerType === "date-slicer") {
     return (
       <Card className="h-full bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-            {config.title || filterColumn}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0 space-y-2">
+        <ChartTitleHeader title={title} position={titlePosition} />
+        <CardContent className={`space-y-2 ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -196,6 +193,7 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
             </PopoverContent>
           </Popover>
         </CardContent>
+        <ChartTitleFooter title={title} position={titlePosition} />
       </Card>
     );
   }
@@ -204,12 +202,8 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
   if (slicerType === "numeric-slicer") {
     return (
       <Card className="h-full bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-            {config.title || filterColumn}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0 space-y-4">
+        <ChartTitleHeader title={title} position={titlePosition} />
+        <CardContent className={`space-y-4 ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
           <Slider
             value={numericRange}
             min={numericStats.min}
@@ -223,6 +217,7 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
             <span>{numericRange[1].toFixed(0)}</span>
           </div>
         </CardContent>
+        <ChartTitleFooter title={title} position={titlePosition} />
       </Card>
     );
   }
@@ -230,12 +225,8 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
   // Default: List Slicer
   return (
     <Card className="h-full bg-card border-border overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title || filterColumn}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-2">
+      <ChartTitleHeader title={title} position={titlePosition} />
+      <CardContent className={`space-y-2 ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -301,6 +292,7 @@ export function SlicerComponent({ config, data, onFilterChange }: SlicerComponen
           </div>
         )}
       </CardContent>
+      <ChartTitleFooter title={title} position={titlePosition} />
     </Card>
   );
 }

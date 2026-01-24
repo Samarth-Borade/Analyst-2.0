@@ -6,7 +6,8 @@ import {
   ResponsiveContainer,
   PolarAngleAxis,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { calculateKPI, formatNumber } from "@/lib/data-utils";
 import type { ChartConfig } from "@/lib/store";
 
@@ -33,14 +34,12 @@ export function GaugeChartComponent({ config, data }: GaugeChartProps) {
     },
   ];
 
+  const titlePosition = config.titlePosition || "top";
+
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 flex flex-col items-center">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={`flex flex-col items-center ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
         <div className="relative w-full h-[160px]">
           <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart
@@ -77,6 +76,7 @@ export function GaugeChartComponent({ config, data }: GaugeChartProps) {
           </div>
         </div>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }

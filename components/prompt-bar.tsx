@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, Loader2 } from "lucide-react";
+import { Send, Sparkles, Loader2, MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ export function PromptBar() {
     addPage,
     updatePage,
     toggleTheme,
+    aiMessage,
     setAiMessage,
     addToPromptHistory,
   } = useDashboardStore();
@@ -93,6 +94,26 @@ export function PromptBar() {
           }
           break;
 
+        case "update_all_charts":
+          // Bulk update: apply chartUpdate to all charts matching targetChartType across all pages
+          if (result.chartUpdate) {
+            const targetType = result.targetChartType;
+            let updatedCount = 0;
+            
+            for (const page of pages) {
+              for (const chart of page.charts) {
+                // If targetChartType is "all" or matches the chart type
+                if (targetType === "all" || chart.type === targetType) {
+                  updateChart(page.id, chart.id, result.chartUpdate);
+                  updatedCount++;
+                }
+              }
+            }
+            
+            console.log(`[Bulk Update] Updated ${updatedCount} charts of type "${targetType}"`);
+          }
+          break;
+
         case "add_chart":
           if (result.targetPageId && result.newChart) {
             addChart(result.targetPageId, result.newChart);
@@ -140,8 +161,34 @@ export function PromptBar() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
-      <div className="max-w-3xl mx-auto">
+    <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
+      <div className="max-w-3xl mx-auto pointer-events-auto">
+        {/* AI Message Display */}
+        {aiMessage && (
+          <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="relative bg-card/95 backdrop-blur-sm border border-border rounded-xl px-4 py-3 shadow-lg">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground font-mono leading-relaxed">
+                    {aiMessage}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setAiMessage("")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showExamples && (
           <div className="mb-3 flex flex-wrap gap-2">
             {EXAMPLE_PROMPTS.map((example) => (

@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import type { ChartConfig } from "@/lib/store";
 
 interface BoxPlotChartProps {
@@ -108,14 +109,12 @@ export function BoxPlotChartComponent({ config, data }: BoxPlotChartProps) {
   const scaleY = (value: number) =>
     chartHeight - padding - ((value - globalMin) / range) * (chartHeight - 2 * padding);
 
+  const titlePosition = config.titlePosition || "top";
+
   return (
     <Card className="h-full bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground font-mono">
-          {config.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 overflow-x-auto">
+      <ChartTitleHeader title={config.title} position={titlePosition} />
+      <CardContent className={`overflow-x-auto ${titlePosition === "bottom" ? "pt-4" : "pt-0"}`}>
         <svg width={chartWidth} height={chartHeight} className="font-mono">
           {/* Y-axis */}
           <line
@@ -246,6 +245,7 @@ export function BoxPlotChartComponent({ config, data }: BoxPlotChartProps) {
           })}
         </svg>
       </CardContent>
+      <ChartTitleFooter title={config.title} position={titlePosition} />
     </Card>
   );
 }
