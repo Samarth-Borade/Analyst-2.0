@@ -30,6 +30,9 @@ const chartConfigSchema = z.object({
   yAxis: z.union([z.string(), z.array(z.string())]).optional(),
   groupBy: z.string().optional(),
   aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
+  // Trend data for KPI cards - LLM should analyze data to determine realistic trends
+  trend: z.enum(["up", "down", "flat"]).optional(),
+  trendValue: z.number().optional(),
   width: z.number(),
   height: z.number(),
   x: z.number(),
@@ -97,7 +100,7 @@ Generate a dashboard with multiple pages:
    - "Trends" (if time series data exists)
 
 Available chart types:
-- kpi: Single value metric card
+- kpi: Single value metric card (IMPORTANT: Must include "trend" and "trendValue" properties)
 - bar: Vertical bar chart
 - clustered-bar: Multiple bars grouped by category
 - stacked-bar: Stacked bar chart
@@ -116,6 +119,13 @@ Available chart types:
 - radar: Radar/spider chart for multi-dimensional comparison
 - table: Data table
 - matrix: Pivot table with drill-down
+
+IMPORTANT FOR KPI CARDS:
+- Every KPI card MUST include "trend" (one of: "up", "down", "flat") and "trendValue" (a number representing percentage change, e.g., 8.5 for 8.5%)
+- Analyze the data to determine realistic trend values based on the data patterns
+- If the data has time series, compare recent vs earlier periods to calculate actual trends
+- If no time comparison is possible, use data distribution insights to suggest realistic trends
+- trendValue should be a reasonable percentage (typically 0-30%)
 
 Rules for page generation:
 - Each page MUST have a clear, descriptive name (not empty, not just "Page")

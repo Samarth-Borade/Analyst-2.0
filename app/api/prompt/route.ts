@@ -1,6 +1,57 @@
 import { generateText } from "ai";
 import { groq } from "@ai-sdk/groq";
-import { z } from "zod";
+import { z, ZodError } from "zod";
+
+// Helper function to convert Zod errors to user-friendly messages
+function formatZodError(error: ZodError): string {
+  const issues = error.issues;
+  
+  const friendlyMessages: string[] = [];
+  
+  for (const issue of issues) {
+    const path = issue.path.join(" → ");
+    
+    if (issue.code === "invalid_enum_value") {
+      const received = (issue as any).received;
+      const options = (issue as any).options as string[];
+      
+      // Create friendly messages for specific fields
+      if (path.includes("titlePosition")) {
+        friendlyMessages.push(
+          `Sorry, "${received}" is not a valid title position. You can use "top" or "bottom".`
+        );
+      } else if (path.includes("aggregation")) {
+        friendlyMessages.push(
+          `Sorry, "${received}" is not a valid aggregation. Try: sum, avg, count, min, or max.`
+        );
+      } else if (path.includes("sortOrder")) {
+        friendlyMessages.push(
+          `Sorry, "${received}" is not a valid sort order. Use "asc" (ascending) or "desc" (descending).`
+        );
+      } else if (path.includes("type")) {
+        friendlyMessages.push(
+          `Sorry, "${received}" is not a supported chart type. Try: bar, line, pie, kpi, table, etc.`
+        );
+      } else {
+        friendlyMessages.push(
+          `Sorry, "${received}" is not valid. Available options: ${options.join(", ")}.`
+        );
+      }
+    } else if (issue.code === "invalid_type") {
+      friendlyMessages.push(
+        `I couldn't understand part of your request. Please try rephrasing it.`
+      );
+    } else {
+      friendlyMessages.push(
+        `Something went wrong processing your request. Please try again with different wording.`
+      );
+    }
+  }
+  
+  return friendlyMessages.length > 0 
+    ? friendlyMessages[0] 
+    : "I couldn't process that request. Please try rephrasing it.";
+}
 
 const updateSchema = z.object({
   action: z.enum([
@@ -43,10 +94,16 @@ const updateSchema = z.object({
         ])
         .optional(),
       title: z.string().optional(),
+      titlePosition: z.enum(["top", "bottom"]).optional(),
       xAxis: z.string().optional(),
       yAxis: z.union([z.string(), z.array(z.string())]).optional(),
       groupBy: z.string().optional(),
       aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
+      // Trend data for KPI cards
+      trend: z.enum(["up", "down", "flat"]).optional(),
+      trendValue: z.number().optional(),
+      // Columns to display in table (array of column names)
+      columns: z.array(z.string()).optional(),
       colors: z.array(z.string()).optional(),
       sortBy: z.string().optional(),
       sortOrder: z.enum(["asc", "desc"]).optional(),
@@ -83,10 +140,16 @@ const updateSchema = z.object({
         "matrix",
       ]),
       title: z.string().default("New Chart"),
+      titlePosition: z.enum(["top", "bottom"]).optional(),
       xAxis: z.string().optional(),
       yAxis: z.union([z.string(), z.array(z.string())]).optional(),
       groupBy: z.string().optional(),
       aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
+      // Trend data for KPI cards - LLM should provide realistic values
+      trend: z.enum(["up", "down", "flat"]).optional(),
+      trendValue: z.number().optional(),
+      // Columns to display in table (array of column names)
+      columns: z.array(z.string()).optional(),
       width: z.number().default(2),
       height: z.number().default(2),
       x: z.number().default(0),
@@ -98,11 +161,13 @@ const updateSchema = z.object({
       id: z.string(),
       name: z.string(),
       charts: z.array(z.any()),
+      showTitle: z.boolean().optional(),
     })
     .optional(),
   pageUpdate: z
     .object({
       name: z.string().optional(),
+      showTitle: z.boolean().optional(),
     })
     .optional(),
   themeUpdate: z.enum(["light", "dark"]).optional(),
@@ -219,6 +284,30 @@ For updating a chart (including sorting and filtering):
   "message": "Updated chart and sorted by column_name in descending order"
 }
 
+Example - For resizing a chart:
+{
+  "action": "update_chart",
+  "targetPageId": "page-overview",
+  "targetChartId": "chart-id",
+  "chartUpdate": {
+    "width": 3,
+    "height": 2
+  },
+  "message": "Resized the chart to be wider"
+}
+
+Example - For moving a chart:
+{
+  "action": "update_chart",
+  "targetPageId": "page-overview",
+  "targetChartId": "chart-id",
+  "chartUpdate": {
+    "x": 2,
+    "y": 0
+  },
+  "message": "Moved the chart to a new position"
+}
+
 Example - For sorting a table by Sales descending:
 {
   "action": "update_chart",
@@ -245,9 +334,31 @@ For adding a new page:
   "newPage": {
     "id": "page-xyz123",
     "name": "Descriptive Page Name",
-    "charts": []
+    "charts": [],
+    "showTitle": true
   },
   "message": "Added a new page called..."
+}
+
+For updating a page (name or title visibility):
+{
+  "action": "update_page",
+  "targetPageId": "page-id-to-update",
+  "pageUpdate": {
+    "name": "New Page Name",
+    "showTitle": true
+  },
+  "message": "Updated the page title"
+}
+
+For showing/hiding page title:
+{
+  "action": "update_page",
+  "targetPageId": "current-page-id",
+  "pageUpdate": {
+    "showTitle": true
+  },
+  "message": "Now showing the page title"
 }
 
 For deleting a page:
@@ -258,7 +369,7 @@ For deleting a page:
 }
 
 Available chart types:
-- kpi: Single value metric card
+- kpi: Single value metric card (IMPORTANT: Must include "trend" and "trendValue" properties)
 - bar: Vertical bar chart
 - clustered-bar: Multiple bars grouped by category
 - stacked-bar: Stacked bar chart
@@ -275,8 +386,21 @@ Available chart types:
 - funnel: Funnel chart for conversion
 - gauge: Gauge for single metrics with targets
 - radar: Radar/spider chart for multi-dimensional comparison
-- table: Data table
+- table: Data table (supports "columns" property to specify which columns to display)
 - matrix: Pivot table with drill-down
+
+IMPORTANT FOR KPI CARDS:
+- When adding or updating a KPI card, ALWAYS include "trend" ("up", "down", or "flat") and "trendValue" (number like 8.5 for 8.5%)
+- Analyze the data context to determine realistic trend values
+- trendValue should be a reasonable percentage (typically 0-30%)
+
+IMPORTANT FOR TABLE CHARTS:
+- Use the "columns" property (array of column names) to specify which columns to display
+- To show specific columns: "columns": ["Product", "Sales", "Quantity"]
+- To add a column: include all existing columns plus the new one in "columns" array
+- To remove a column: include all columns except the one to remove in "columns" array
+- If user asks to "show only X and Y columns", set columns to ["X", "Y"]
+- Column names must match exactly with "Available Column Names" (case-sensitive)
 
 CRITICAL RULES:
 - When action is "add_chart", you MUST include a complete newChart object with ALL required fields: id, type, title, width, height, x, y
@@ -293,11 +417,41 @@ CRITICAL RULES:
 - For filtering requests, use filterColumn and filterValues to filter data
 - For sorting requests, if there's only one table, target that one. If multiple tables, try to find the most relevant one
 - IMPORTANT: sortBy MUST be an exact column name from the "Available Column Names" list - never hardcode or guess column names
+
+RESIZING CHARTS:
+- When user asks to make a chart "bigger", "larger", "wider", increase width (max 4) or height (max 4)
+- When user asks to make a chart "smaller", "narrower", decrease width (min 1) or height (min 1)
+- "full width" = width: 4
+- "half width" = width: 2
+- "quarter width" = width: 1
+- "taller" = increase height
+- "shorter" = decrease height
+
+TITLE POSITION:
+- Each chart can have its title at "top" (default) or "bottom"
+- Use titlePosition: "top" for title above the chart
+- Use titlePosition: "bottom" for title below the chart (caption style)
+- When user asks to "move title to bottom", "put title at bottom", "show title below", set titlePosition: "bottom"
+- When user asks to "move title to top", "put title at top", "show title above", set titlePosition: "top"
+
+PAGE TITLE (centered heading):
+- Each page can have a centered title shown at the top of the canvas
+- Use showTitle: true to show the page name as a centered title
+- Use showTitle: false to hide the page title
+- When user asks to "show page title", "add page title", "show heading", use action: "update_page" with showTitle: true
+- When user asks to "hide page title", "remove page title", "hide heading", use action: "update_page" with showTitle: false
+- To rename a page, use pageUpdate with "name" property
+
+MOVING/REORDERING CHARTS:
+- When user asks to "move", "swap", or "reorder" charts, update the x and y positions
+- x ranges from 0-3 (column position)
+- y represents row position (0, 1, 2, etc.)
+
 - Chart/Page IDs must be unique, use format: "chart-" + random string or "page-" + random string
 - Only use column names that exist in the schema
 - For KPI charts: only set yAxis (no xAxis)
 - For bar/line/area charts: set both xAxis and yAxis
-- Chart sizes: width 1-4, height 1-2
+- Chart sizes: width 1-4, height 1-4
 - Position: x: 0-3, y: calculate based on existing charts
 - Colors as hex: "#7c3aed" (purple), "#ef4444" (red), "#22c55e" (green), "#3b82f6" (blue), "#f59e0b" (amber), "#06b6d4" (cyan)
 - Always include a friendly "message" field
@@ -330,7 +484,32 @@ Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
   } catch (error) {
     console.error("Prompt error:", error);
     
-    // More detailed error logging
+    // Handle Zod validation errors with user-friendly messages
+    if (error instanceof ZodError) {
+      const friendlyMessage = formatZodError(error);
+      console.error("Validation error:", error.issues);
+      return Response.json(
+        { 
+          error: "Validation failed", 
+          details: friendlyMessage 
+        },
+        { status: 400 }
+      );
+    }
+    
+    // Handle JSON parsing errors
+    if (error instanceof SyntaxError) {
+      console.error("JSON parse error:", error.message);
+      return Response.json(
+        { 
+          error: "Failed to process", 
+          details: "I had trouble understanding that request. Please try rephrasing it." 
+        },
+        { status: 400 }
+      );
+    }
+    
+    // Handle other errors
     if (error instanceof Error) {
       console.error("Error details:", error.message);
     }
@@ -338,7 +517,7 @@ Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
     return Response.json(
       { 
         error: "Failed to process prompt", 
-        details: error instanceof Error ? error.message : "Unknown error" 
+        details: "Something went wrong. Please try again with a different request." 
       },
       { status: 500 }
     );

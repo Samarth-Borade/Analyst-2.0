@@ -123,3 +123,19 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide Next.js development indicator */
+[data-nextjs-dialog-overlay],
+[data-nextjs-dialog],
+nextjs-portal,
+#__next-build-watcher,
+[data-nextjs-toast] {
+  display: none !important;
+}
+
+/* Hide Vercel toolbar/feedback button */
+[data-vercel-toolbar],
+.vercel-live-feedback-button,
+[class*="vercel-"] {
+  display: none !important;
+}
