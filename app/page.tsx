@@ -69,6 +69,8 @@ export default function Home() {
     case "upload":
       return <UploadView onUploadComplete={() => setCurrentView("dashboard")} />;
     case "dashboard":
+    case "data":
+    case "data-modeling":
       return <DashboardView onReset={() => setCurrentView("home")} />;
     case "relations":
       return <RelationsView />;

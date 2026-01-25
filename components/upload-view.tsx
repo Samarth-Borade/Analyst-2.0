@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUpload } from "@/components/file-upload";
+import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
 import { Moon, Sun, BarChart3, Sparkles, Zap, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardStore } from "@/lib/store";
@@ -32,8 +32,8 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-16">
-        <div className="text-center mb-12">
+      <main className="container mx-auto px-6 py-12">
+        <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-foreground mb-4 text-balance">
             Transform Your Data Into Insights
           </h1>
@@ -43,10 +43,10 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
           </p>
         </div>
 
-        <FileUpload onAnalysisComplete={onUploadComplete} />
+        <EnhancedFileUpload onAnalysisComplete={onUploadComplete} mode="initial" />
 
         {/* Features */}
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <div className="text-center p-6">
             <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Sparkles className="h-6 w-6 text-primary" />
@@ -82,7 +82,7 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
         </div>
 
         {/* Trust Badge */}
-        <div className="mt-16 text-center">
+        <div className="mt-12 text-center">
           <div className="inline-flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-full">
             <Shield className="h-4 w-4" />
             Your data never leaves your browser. Processing happens locally.

@@ -163,7 +163,11 @@ interface DashboardState {
   aiMessage: string | null;
   promptHistory: string[];
   sidebarCollapsed: boolean;
-  currentView: "home" | "upload" | "dashboard" | "relations";
+  currentView: "home" | "upload" | "dashboard" | "relations" | "data" | "data-modeling";
+  
+  // Data Preview (for column selection during upload)
+  previewData: Record<string, unknown>[] | null;
+  selectedColumns: string[];
 
   // Project Actions
   createProject: (name: string) => string;
@@ -200,7 +204,13 @@ interface DashboardState {
   setAiMessage: (message: string | null) => void;
   addToPromptHistory: (prompt: string) => void;
   toggleSidebar: () => void;
-  setCurrentView: (view: "home" | "upload" | "dashboard" | "relations") => void;
+  setCurrentView: (view: "home" | "upload" | "dashboard" | "relations" | "data" | "data-modeling") => void;
+  
+  // Data Preview Actions
+  setPreviewData: (data: Record<string, unknown>[] | null) => void;
+  setSelectedColumns: (columns: string[]) => void;
+  toggleColumn: (column: string) => void;
+  
   reset: () => void;
 }
 
@@ -221,6 +231,8 @@ const initialState = {
   promptHistory: [] as string[],
   sidebarCollapsed: false,
   currentView: "home" as const,
+  previewData: null as Record<string, unknown>[] | null,
+  selectedColumns: [] as string[],
 };
 
 export const useDashboardStore = create<DashboardState>()(
@@ -335,12 +347,30 @@ export const useDashboardStore = create<DashboardState>()(
       addDataSource: (name, data, schema) => {
         const id = `datasource-${Date.now()}`;
         const newDataSource: DataSource = { id, name, data, schema };
-        set((state) => ({
-          dataSources: [...state.dataSources, newDataSource],
-          rawData: state.rawData || data,
-          schema: state.schema || schema,
-          fileName: state.fileName || name,
-        }));
+        
+        set((state) => {
+          // Check if a data source with the same name already exists
+          const existingIndex = state.dataSources.findIndex(
+            (ds) => ds.name.toLowerCase() === name.toLowerCase()
+          );
+          
+          let newDataSources: DataSource[];
+          if (existingIndex >= 0) {
+            // Replace existing data source with the same name
+            newDataSources = [...state.dataSources];
+            newDataSources[existingIndex] = newDataSource;
+          } else {
+            // Add new data source
+            newDataSources = [...state.dataSources, newDataSource];
+          }
+          
+          return {
+            dataSources: newDataSources,
+            rawData: state.rawData || data,
+            schema: state.schema || schema,
+            fileName: state.fileName || name,
+          };
+        });
         get().saveCurrentProject();
         return id;
       },
@@ -497,6 +527,18 @@ export const useDashboardStore = create<DashboardState>()(
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       setCurrentView: (currentView) => set({ currentView }),
+      
+      // Data Preview Actions
+      setPreviewData: (previewData) => set({ previewData }),
+      
+      setSelectedColumns: (selectedColumns) => set({ selectedColumns }),
+      
+      toggleColumn: (column) => 
+        set((state) => ({
+          selectedColumns: state.selectedColumns.includes(column)
+            ? state.selectedColumns.filter((c) => c !== column)
+            : [...state.selectedColumns, column],
+        })),
 
       reset: () =>
         set({
