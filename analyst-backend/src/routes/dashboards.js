@@ -1,7 +1,7 @@
 // src/routes/dashboards.js
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('./auth');
+const authMiddleware = require('../middlewares/authMiddleware');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();

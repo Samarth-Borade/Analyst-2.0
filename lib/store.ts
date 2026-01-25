@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { authApi, dashboardApi, getToken } from "./api";
 
 export type ColumnType = "numeric" | "categorical" | "datetime" | "text";
 
@@ -139,6 +140,10 @@ export interface Project {
 }
 
 interface DashboardState {
+  // Auth
+  isAuthenticated: boolean;
+  user: { id: string; email: string; fullName: string } | null;
+  
   // Project Management
   projects: Project[];
   currentProjectId: string | null;
@@ -174,6 +179,16 @@ interface DashboardState {
   openProject: (projectId: string) => void;
   deleteProject: (projectId: string) => void;
   saveCurrentProject: () => void;
+  
+  // Auth Actions
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string, fullName?: string) => Promise<boolean>;
+  logout: () => void;
+  checkAuth: () => void;
+  
+  // Backend Sync Actions
+  syncProjectsFromBackend: () => Promise<void>;
+  syncProjectToBackend: (projectId: string) => Promise<void>;
   
   // Data Source Actions
   addDataSource: (name: string, data: Record<string, unknown>[], schema: DataSchema) => string;
@@ -215,6 +230,8 @@ interface DashboardState {
 }
 
 const initialState = {
+  isAuthenticated: false,
+  user: null as { id: string; email: string; fullName: string } | null,
   projects: [] as Project[],
   currentProjectId: null as string | null,
   rawData: null as Record<string, unknown>[] | null,
@@ -251,8 +268,8 @@ export const useDashboardStore = create<DashboardState>()(
           relations: [],
           pages: [],
         };
-        set((state) => ({
-          projects: [...state.projects, newProject],
+        set((s) => ({
+          projects: [...s.projects, newProject],
           currentProjectId: id,
           currentView: "upload",
           rawData: null,
@@ -263,7 +280,115 @@ export const useDashboardStore = create<DashboardState>()(
           pages: [],
           currentPageId: null,
         }));
+        
+        // Sync to backend if authenticated
+        const currentState = get();
+        if (currentState.isAuthenticated) {
+          dashboardApi.create({
+            title: name,
+            description: "",
+            configuration: { dataSources: [], relations: [], pages: [] },
+          }).then((dashboard) => {
+            // Update project with backend ID
+            set((s) => ({
+              projects: s.projects.map((p) =>
+                p.id === id ? { ...p, id: dashboard.id } : p
+              ),
+              currentProjectId: dashboard.id,
+            }));
+          }).catch((err) => console.error("Failed to sync project:", err));
+        }
+        
         return id;
+      },
+
+      // Auth methods
+      login: async (email: string, password: string) => {
+        try {
+          const data = await authApi.login(email, password);
+          set({ isAuthenticated: true, user: data.user });
+          // Fetch projects from backend after login
+          get().syncProjectsFromBackend();
+          return true;
+        } catch (error) {
+          console.error("Login failed:", error);
+          return false;
+        }
+      },
+
+      register: async (email: string, password: string, fullName?: string) => {
+        try {
+          const data = await authApi.register(email, password, fullName);
+          set({ isAuthenticated: true, user: data.user });
+          return true;
+        } catch (error) {
+          console.error("Registration failed:", error);
+          return false;
+        }
+      },
+
+      logout: () => {
+        authApi.logout();
+        set({ isAuthenticated: false, user: null });
+      },
+
+      checkAuth: () => {
+        const hasToken = !!getToken();
+        set({ isAuthenticated: hasToken });
+        if (hasToken) {
+          get().syncProjectsFromBackend();
+        }
+      },
+
+      syncProjectsFromBackend: async () => {
+        try {
+          const dashboards = await dashboardApi.list();
+          const backendProjects: Project[] = dashboards.map((d) => ({
+            id: d.id,
+            name: d.title,
+            createdAt: d.createdAt,
+            updatedAt: d.updatedAt,
+            dataSources: (d.configuration?.dataSources as DataSource[]) || [],
+            relations: (d.configuration?.relations as DataRelation[]) || [],
+            pages: (d.configuration?.pages as DashboardPage[]) || [],
+          }));
+          
+          // Merge with local projects (keep local if not authenticated)
+          const state = get();
+          const localOnlyProjects = state.projects.filter(
+            (p) => !backendProjects.find((bp) => bp.id === p.id)
+          );
+          
+          set({ projects: [...backendProjects, ...localOnlyProjects] });
+        } catch (error) {
+          console.error("Failed to sync projects from backend:", error);
+        }
+      },
+
+      syncProjectToBackend: async (projectId: string) => {
+        const state = get();
+        if (!state.isAuthenticated) return;
+        
+        const project = state.projects.find((p) => p.id === projectId);
+        if (!project) return;
+        
+        try {
+          await dashboardApi.update(projectId, {
+            title: project.name,
+            configuration: {
+              dataSources: project.dataSources.map((ds) => ({
+                id: ds.id,
+                name: ds.name,
+                schema: ds.schema,
+                // Don't store raw data in backend config - too large
+              })),
+              relations: project.relations,
+              pages: project.pages,
+            },
+          });
+        } catch (error) {
+          console.error("Failed to sync project to backend:", error);
+        }
       },
 
       openProject: (projectId: string) => {
@@ -307,9 +432,17 @@ export const useDashboardStore = create<DashboardState>()(
       },
 
       deleteProject: (projectId: string) => {
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== projectId),
-          ...(state.currentProjectId === projectId
+        // Delete from backend if authenticated
+        const currentState = get();
+        if (currentState.isAuthenticated) {
+          dashboardApi.delete(projectId).catch((err) => 
+            console.error("Failed to delete from backend:", err)
+          );
+        }
+        
+        set((s) => ({
+          projects: s.projects.filter((p) => p.id !== projectId),
+          ...(s.currentProjectId === projectId
             ? {
                 currentProjectId: null,
                 rawData: null,
@@ -342,6 +475,12 @@ export const useDashboardStore = create<DashboardState>()(
               : p
           ),
         }));
+        
+        // Sync to backend if authenticated
+        const state = get();
+        if (state.isAuthenticated && state.currentProjectId) {
+          state.syncProjectToBackend(state.currentProjectId);
+        }
       },
 
       addDataSource: (name, data, schema) => {
@@ -560,6 +699,8 @@ export const useDashboardStore = create<DashboardState>()(
         currentPageId: state.currentPageId,
         schema: state.schema,
         fileName: state.fileName,
+        isAuthenticated: state.isAuthenticated,
+        user: state.user,
         // Note: Not persisting rawData (too large) - will be restored from dataSources
       }),
     }
