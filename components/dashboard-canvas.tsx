@@ -195,7 +195,7 @@ export function DashboardCanvas() {
       </div>
       
       {/* Charts Grid */}
-      <div className="flex-1 p-6 pb-32 overflow-auto">
+      <div className="flex-1 p-6 pb-40 overflow-auto">
         {/* Centered Page Title */}
         {currentPage?.showTitle && (
           <div className="text-center mb-6">

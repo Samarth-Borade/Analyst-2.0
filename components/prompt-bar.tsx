@@ -11,8 +11,6 @@ const EXAMPLE_PROMPTS = [
   "Add a line chart showing revenue over time",
   "Create a new page for regional analysis",
   "Show top 10 products by sales",
-  "Add a KPI for average order value",
-  "Make the dashboard darker",
 ];
 
 export function PromptBar() {
@@ -144,6 +142,12 @@ export function PromptBar() {
           if (result.themeUpdate) {
             toggleTheme();
           }
+          break;
+
+        case "reject":
+          // Request was rejected for ethical or technical reasons
+          // The message already contains the explanation - no action needed
+          console.log(`[Rejected] Reason: ${result.rejectReason || 'unknown'}`);
           break;
       }
 

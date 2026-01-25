@@ -290,7 +290,7 @@ export function DashboardSidebar() {
             </div>
 
             {/* Dimensions */}
-            <div className="pb-24">
+            <div className="pb-40">
               <h4 className="text-xs text-muted-foreground mb-2 font-mono">Dimensions</h4>
               <div className="space-y-1">
                 {schema.columns

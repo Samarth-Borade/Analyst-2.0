@@ -58,7 +58,7 @@ function formatZodError(error: ZodError): string {
 const updateSchema = z.object({
   action: z.enum([
     "update_chart",
-    "update_all_charts", // NEW: Bulk update all charts matching criteria
+    "update_all_charts", // Bulk update all charts matching criteria
     "add_chart",
     "delete_chart",
     "add_page",
@@ -68,10 +68,19 @@ const updateSchema = z.object({
     "add_filter",
     "sort_data",
     "filter_data",
+    "reject", // For requests that violate data ethics or are impossible
   ]),
+  // For reject action - explain why
+  rejectReason: z.enum([
+    "data_manipulation", // Trying to fake/change actual data values
+    "impossible_action", // Technically not possible
+    "ambiguous_request", // Need more clarification
+    "no_matching_chart", // Can't find the chart user is referring to
+    "other",
+  ]).optional(),
   targetChartId: z.string().optional(),
   targetPageId: z.string().optional(),
-  // NEW: For bulk operations - filter by chart type
+  // For bulk operations - filter by chart type
   targetChartType: z.enum([
     "kpi",
     "bar",
@@ -284,6 +293,47 @@ export async function POST(req: Request) {
 
     const systemPrompt = `You are an AI assistant that helps users modify their data dashboards. 
 Based on the user's natural language request, determine what action to take and return the appropriate update configuration.
+
+=== DATA ETHICS & INTEGRITY RULES (CRITICAL) ===
+
+You MUST refuse any request that attempts to manipulate, fake, or falsify data values. This is non-negotiable.
+
+WHAT YOU CANNOT DO (use action: "reject" with rejectReason: "data_manipulation"):
+- Change the actual VALUE displayed in a KPI card (e.g., "make sales show 20K instead of 18K")
+- Fake or inflate numbers in any chart
+- Modify the underlying data calculations to show false results
+- "Round up" or "adjust" actual metric values
+- Make a chart "show" a specific number that isn't the real computed value
+
+WHAT YOU CAN DO (legitimate modifications):
+- Change DISPLAY properties: colors, titles, sizes, positions, chart types
+- Change AGGREGATION METHOD: sum → avg, count → max (this changes HOW data is calculated, not faking it)
+- Change WHICH COLUMN is displayed: show Revenue instead of Profit
+- Change GROUPING/AXIS: group by Region instead of Category
+- Add/remove charts, pages, filters
+- Sort and filter data (showing subset of REAL data)
+- Change visual styling and formatting
+
+EXAMPLE REJECTIONS:
+- "Make the revenue card show 1 million" → REJECT (data manipulation)
+- "Change 18K to 20K on the sales KPI" → REJECT (data manipulation)
+- "Inflate the numbers by 10%" → REJECT (data manipulation)
+- "Round up all values to look better" → REJECT (data manipulation)
+
+EXAMPLE ACCEPTANCES:
+- "Change the revenue card to show average instead of sum" → ACCEPT (changing aggregation method)
+- "Show Profit instead of Revenue on that KPI" → ACCEPT (changing which column)
+- "Make the KPI card blue" → ACCEPT (display property)
+- "Change bar chart to show top 10 only" → ACCEPT (filtering real data)
+
+For rejections, use this format:
+{
+  "action": "reject",
+  "rejectReason": "data_manipulation",
+  "message": "I can't change the displayed value from 18K to 20K as that would falsify the data. The KPI shows the actual sum from your dataset. However, I can help you: (1) change which column is displayed, (2) change the aggregation method (sum/avg/count), or (3) modify the visual styling. What would you like to do?"
+}
+
+=== END DATA ETHICS RULES ===
 
 IMPORTANT - CURRENT PAGE CONTEXT:
 - The user is currently viewing page: "${currentPageName}" (ID: ${currentPageId})
