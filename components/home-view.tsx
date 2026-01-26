@@ -10,6 +10,8 @@ import {
   Moon,
   Sun,
   BarChart3,
+  Database,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,8 +25,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDashboardStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { UserButton } from "@/components/auth-modal";
+import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
+import { FirebaseConnector } from "@/components/firebase-connector";
 
 export function HomeView() {
   const {
@@ -39,6 +45,8 @@ export function HomeView() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showDataSourceDialog, setShowDataSourceDialog] = useState(false);
+  const [dataSourceTab, setDataSourceTab] = useState<"file" | "firebase">("file");
 
   const handleCreateProject = () => {
     if (newProjectName.trim()) {
@@ -81,13 +89,16 @@ export function HomeView() {
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={toggleTheme}>
-          {theme === "dark" ? (
-            <Sun className="h-5 w-5" />
-          ) : (
-            <Moon className="h-5 w-5" />
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={toggleTheme}>
+            {theme === "dark" ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
+          <UserButton />
+        </div>
       </header>
 
       {/* Main Content */}
@@ -140,7 +151,53 @@ export function HomeView() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          
+          {/* Add Data Source Button */}
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="gap-2 font-mono"
+            onClick={() => setShowDataSourceDialog(true)}
+          >
+            <Database className="h-5 w-5" />
+            Connect Data
+          </Button>
         </div>
+        
+        {/* Data Source Dialog */}
+        <Dialog open={showDataSourceDialog} onOpenChange={setShowDataSourceDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="font-mono flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Add Data Source
+              </DialogTitle>
+            </DialogHeader>
+            <Tabs value={dataSourceTab} onValueChange={(v) => setDataSourceTab(v as "file" | "firebase")}>
+              <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
+                <TabsTrigger value="file" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  Upload File
+                </TabsTrigger>
+                <TabsTrigger value="firebase" className="gap-2">
+                  <Database className="h-4 w-4" />
+                  Firebase
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="file">
+                <EnhancedFileUpload 
+                  onAnalysisComplete={() => setShowDataSourceDialog(false)} 
+                  mode="initial" 
+                />
+              </TabsContent>
+              
+              <TabsContent value="firebase">
+                <FirebaseConnector />
+              </TabsContent>
+            </Tabs>
+          </DialogContent>
+        </Dialog>
 
         {projects.length === 0 ? (
           <Card className="border-dashed">

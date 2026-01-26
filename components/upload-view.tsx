@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
-import { Moon, Sun, BarChart3, Sparkles, Zap, Shield } from "lucide-react";
+import { FirebaseConnector } from "@/components/firebase-connector";
+import { Moon, Sun, BarChart3, Sparkles, Zap, Shield, Upload, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardStore } from "@/lib/store";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface UploadViewProps {
   onUploadComplete: () => void;
@@ -11,6 +14,7 @@ interface UploadViewProps {
 
 export function UploadView({ onUploadComplete }: UploadViewProps) {
   const { theme, toggleTheme } = useDashboardStore();
+  const [activeTab, setActiveTab] = useState<"file" | "firebase">("file");
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,12 +42,31 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
             Transform Your Data Into Insights
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto text-pretty">
-            Upload your CSV or Excel file and let AI automatically generate beautiful,
-            interactive dashboards. Edit everything using natural language.
+            Upload your CSV or Excel file, or connect to Firebase for real-time data.
+            Let AI automatically generate beautiful, interactive dashboards.
           </p>
         </div>
 
-        <EnhancedFileUpload onAnalysisComplete={onUploadComplete} mode="initial" />
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "file" | "firebase")} className="max-w-4xl mx-auto">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-8">
+            <TabsTrigger value="file" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Upload File
+            </TabsTrigger>
+            <TabsTrigger value="firebase" className="gap-2">
+              <Database className="h-4 w-4" />
+              Firebase
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="file">
+            <EnhancedFileUpload onAnalysisComplete={onUploadComplete} mode="initial" />
+          </TabsContent>
+          
+          <TabsContent value="firebase">
+            <FirebaseConnector />
+          </TabsContent>
+        </Tabs>
 
         {/* Features */}
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">

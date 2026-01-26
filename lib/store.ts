@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { authApi, dashboardApi, getToken } from "./api";
+import { authApi, dashboardApi, promptApi, getToken, userApi, dataSourceApi } from "./api";
 
 export type ColumnType = "numeric" | "categorical" | "datetime" | "text";
 
@@ -176,7 +176,7 @@ interface DashboardState {
 
   // Project Actions
   createProject: (name: string) => string;
-  openProject: (projectId: string) => void;
+  openProject: (projectId: string) => Promise<void>;
   deleteProject: (projectId: string) => void;
   saveCurrentProject: () => void;
   
@@ -189,6 +189,8 @@ interface DashboardState {
   // Backend Sync Actions
   syncProjectsFromBackend: () => Promise<void>;
   syncProjectToBackend: (projectId: string) => Promise<void>;
+  initializeFromBackend: () => Promise<void>;
+  savePromptToBackend: (promptText: string, dashboardId?: string) => Promise<void>;
   
   // Data Source Actions
   addDataSource: (name: string, data: Record<string, unknown>[], schema: DataSchema) => string;
@@ -391,9 +393,126 @@ export const useDashboardStore = create<DashboardState>()(
         }
       },
 
-      openProject: (projectId: string) => {
+      initializeFromBackend: async () => {
+        // Safety check for SSR
+        if (typeof window === 'undefined') return;
+        
+        const hasToken = !!getToken();
+        if (!hasToken) {
+          set({ isAuthenticated: false, user: null });
+          return;
+        }
+
+        try {
+          // Verify token and get user profile
+          const user = await userApi.getProfile();
+          set({ 
+            isAuthenticated: true, 
+            user: { id: user.id, email: user.email, fullName: user.fullName } 
+          });
+
+          // Fetch all dashboards/projects from backend
+          const dashboards = await dashboardApi.list();
+          const backendProjects: Project[] = dashboards.map((d) => ({
+            id: d.id,
+            name: d.title,
+            createdAt: d.createdAt || new Date().toISOString(),
+            updatedAt: d.updatedAt || new Date().toISOString(),
+            dataSources: Array.isArray(d.configuration?.dataSources) ? (d.configuration.dataSources as DataSource[]) : [],
+            relations: Array.isArray(d.configuration?.relations) ? (d.configuration.relations as DataRelation[]) : [],
+            pages: Array.isArray(d.configuration?.pages) ? (d.configuration.pages as DashboardPage[]) : [],
+          }));
+
+          // Fetch prompt history
+          let promptHistory: string[] = [];
+          try {
+            const { prompts } = await promptApi.getHistory(100);
+            promptHistory = prompts.map((p) => p.promptText);
+          } catch (e) {
+            console.log("No prompts found");
+          }
+
+          // Get the saved currentProjectId from localStorage (already rehydrated by zustand)
+          const currentState = get();
+          const savedProjectId = currentState.currentProjectId;
+          
+          // Find the project in backend data
+          const currentProject = savedProjectId 
+            ? backendProjects.find(p => p.id === savedProjectId)
+            : backendProjects[0]; // Default to first project if none saved
+
+          set({ 
+            projects: backendProjects,
+            promptHistory,
+          });
+
+          // If we have a current project, restore its data
+          if (currentProject) {
+            console.log("Restoring project from backend:", currentProject.name);
+            
+            // Fetch data sources with actual data from backend
+            let loadedDataSources: DataSource[] = [];
+            try {
+              const backendDataSources = await dataSourceApi.getForDashboard(currentProject.id);
+              loadedDataSources = backendDataSources.map((ds) => ({
+                id: ds.id,
+                name: ds.name,
+                data: Array.isArray(ds.data) ? ds.data : [],
+                schema: ds.schema as DataSchema,
+              }));
+              console.log("Loaded", loadedDataSources.length, "data sources from backend");
+            } catch (e) {
+              console.log("No data sources found in backend, using config");
+              loadedDataSources = Array.isArray(currentProject.dataSources) ? currentProject.dataSources : [];
+            }
+            
+            const projectPages = Array.isArray(currentProject.pages) ? currentProject.pages : [];
+            const projectRelations = Array.isArray(currentProject.relations) ? currentProject.relations : [];
+            const firstDataSource = loadedDataSources[0];
+            
+            set({
+              currentProjectId: currentProject.id,
+              dataSources: loadedDataSources,
+              relations: projectRelations,
+              pages: projectPages,
+              currentPageId: projectPages.length > 0 ? projectPages[0].id : null,
+              rawData: firstDataSource?.data || null,
+              schema: firstDataSource?.schema || null,
+              fileName: firstDataSource?.name || null,
+              // If we have pages, go to dashboard view; otherwise show upload to re-add data
+              currentView: projectPages.length > 0 ? "dashboard" : "home",
+            });
+          }
+
+          console.log("Initialized from backend:", backendProjects.length, "projects");
+        } catch (error) {
+          console.error("Failed to initialize from backend:", error);
+          // Token might be invalid, clear auth state
+          set({ isAuthenticated: false, user: null });
+        }
+      },
+
+      savePromptToBackend: async (promptText: string, dashboardId?: string) => {
         const state = get();
-        const project = state.projects.find((p) => p.id === projectId);
+        if (!state.isAuthenticated) return;
+
+        try {
+          const result = await promptApi.submit(promptText);
+          if (dashboardId && result.prompt.id) {
+            // Update prompt status with dashboard ID
+            await promptApi.updateStatus(result.prompt.id, {
+              status: 'completed',
+              dashboardId,
+            });
+          }
+        } catch (error) {
+          console.error("Failed to save prompt to backend:", error);
+        }
+      },
+
+      openProject: async (projectId: string) => {
+        const currentState = get();
+        const project = currentState.projects.find((p) => p.id === projectId);
         
         if (project) {
           // Validate pages and dataSources before setting
@@ -406,15 +525,47 @@ export const useDashboardStore = create<DashboardState>()(
             dataSources: validDataSources.length,
           });
           
+          // Fetch data sources with actual data from backend if authenticated
+          let loadedDataSources: DataSource[] = validDataSources;
+          if (currentState.isAuthenticated) {
+            try {
+              const backendDataSources = await dataSourceApi.getForDashboard(projectId);
+              loadedDataSources = backendDataSources.map((ds) => ({
+                id: ds.id,
+                name: ds.name,
+                data: Array.isArray(ds.data) ? ds.data : [],
+                schema: ds.schema as DataSchema,
+              }));
+              console.log("Loaded", loadedDataSources.length, "data sources from backend");
+            } catch (e) {
+              console.log("Failed to fetch data sources from backend, using local:", e);
+            }
+          }
+          
+          // If no data sources loaded from backend, try to preserve existing data
+          if (loadedDataSources.length === 0 || (loadedDataSources[0]?.data?.length === 0)) {
+            const hasExistingData = currentState.rawData && currentState.rawData.length > 0;
+            if (hasExistingData && validDataSources.length > 0) {
+              loadedDataSources = validDataSources.map((ds, index) => {
+                if (index === 0) {
+                  return { ...ds, data: currentState.rawData || [] };
+                }
+                return ds;
+              });
+            }
+          }
+          
+          const firstDataSource = loadedDataSources[0];
+          
           set({
             currentProjectId: projectId,
-            dataSources: validDataSources,
+            dataSources: loadedDataSources,
             relations: validRelations,
             pages: validPages,
             currentPageId: validPages.length > 0 ? validPages[0].id : null,
-            rawData: validDataSources.length > 0 ? validDataSources[0].data : null,
-            schema: validDataSources.length > 0 ? validDataSources[0].schema : null,
-            fileName: validDataSources.length > 0 ? validDataSources[0].name : null,
+            rawData: firstDataSource?.data || null,
+            schema: firstDataSource?.schema || currentState.schema,
+            fileName: firstDataSource?.name || currentState.fileName,
             currentView: validPages.length > 0 ? "dashboard" : "upload",
             isLoading: false,
             aiMessage: null,
@@ -459,8 +610,8 @@ export const useDashboardStore = create<DashboardState>()(
       },
 
       saveCurrentProject: () => {
-        const state = get();
-        if (!state.currentProjectId) return;
+        const currentState = get();
+        if (!currentState.currentProjectId) return;
         
         set((s) => ({
           projects: s.projects.map((p) =>
@@ -477,9 +628,8 @@ export const useDashboardStore = create<DashboardState>()(
         }));
         
         // Sync to backend if authenticated
-        const state = get();
-        if (state.isAuthenticated && state.currentProjectId) {
-          state.syncProjectToBackend(state.currentProjectId);
+        if (currentState.isAuthenticated && currentState.currentProjectId) {
+          currentState.syncProjectToBackend(currentState.currentProjectId);
         }
       },
 
@@ -510,6 +660,30 @@ export const useDashboardStore = create<DashboardState>()(
             fileName: state.fileName || name,
           };
         });
+        
+        // Save data source to backend
+        const currentState = get();
+        if (currentState.isAuthenticated && currentState.currentProjectId) {
+          dataSourceApi.save({
+            dashboardId: currentState.currentProjectId,
+            name,
+            type: 'csv',
+            schema,
+            data,
+            sourceId: id,
+          }).then((savedDs) => {
+            // Update local data source with backend ID
+            set((state) => ({
+              dataSources: state.dataSources.map((ds) =>
+                ds.id === id ? { ...ds, id: savedDs.id } : ds
+              ),
+            }));
+            console.log("Data source saved to backend:", savedDs.id);
+          }).catch((err) => {
+            console.error("Failed to save data source to backend:", err);
+          });
+        }
+        
         get().saveCurrentProject();
         return id;
       },
@@ -657,10 +831,16 @@ export const useDashboardStore = create<DashboardState>()(
 
       setAiMessage: (aiMessage) => set({ aiMessage }),
 
-      addToPromptHistory: (prompt) =>
+      addToPromptHistory: (prompt) => {
         set((state) => ({
           promptHistory: [prompt, ...state.promptHistory].slice(0, 50),
-        })),
+        }));
+        // Save to backend
+        const state = get();
+        if (state.isAuthenticated) {
+          state.savePromptToBackend(prompt, state.currentProjectId || undefined);
+        }
+      },
 
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -689,11 +869,26 @@ export const useDashboardStore = create<DashboardState>()(
     {
       name: "ai-analyst-storage",
       partialize: (state) => ({
-        projects: state.projects,
+        // Only persist metadata, not raw data (too large for localStorage)
+        projects: state.projects.map((p) => ({
+          ...p,
+          dataSources: p.dataSources.map((ds) => ({
+            id: ds.id,
+            name: ds.name,
+            schema: ds.schema,
+            data: [], // Don't persist raw data - too large
+          })),
+        })),
         theme: state.theme,
         currentProjectId: state.currentProjectId,
         currentView: state.currentView,
-        dataSources: state.dataSources,
+        // Don't persist dataSources with full data - only schema
+        dataSources: state.dataSources.map((ds) => ({
+          id: ds.id,
+          name: ds.name,
+          schema: ds.schema,
+          data: [], // Exclude raw data
+        })),
         relations: state.relations,
         pages: state.pages,
         currentPageId: state.currentPageId,
@@ -701,7 +896,6 @@ export const useDashboardStore = create<DashboardState>()(
         fileName: state.fileName,
         isAuthenticated: state.isAuthenticated,
         user: state.user,
-        // Note: Not persisting rawData (too large) - will be restored from dataSources
       }),
     }
   )

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Moon, Sun, Download, Home, FileSpreadsheet, Plus, Database, X } from "lucide-react";
+import { Moon, Sun, Download, Home, FileSpreadsheet, Plus, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { useDashboardStore } from "@/lib/store";
 import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
+import { UserButton } from "@/components/auth-modal";
 
 interface DashboardHeaderProps {
   onReset: () => void;
@@ -84,6 +85,8 @@ export function DashboardHeader({ onReset }: DashboardHeaderProps) {
           >
             <Home className="h-4 w-4" />
           </Button>
+          {/* User Profile / Login Button */}
+          <UserButton />
         </div>
       </header>
 

@@ -177,3 +177,98 @@ export const userApi = {
     });
   },
 };
+
+// Prompt API
+export interface PromptData {
+  id: string;
+  promptText: string;
+  status: string;
+  dashboardId?: string;
+  processingTime?: number;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export const promptApi = {
+  submit: async (promptText: string): Promise<{ message: string; prompt: PromptData }> => {
+    return apiRequest<{ message: string; prompt: PromptData }>('/api/prompts', {
+      method: 'POST',
+      body: JSON.stringify({ promptText }),
+    });
+  },
+
+  getHistory: async (limit = 50): Promise<{ prompts: PromptData[]; pagination: unknown }> => {
+    return apiRequest<{ prompts: PromptData[]; pagination: unknown }>(`/api/prompts/history?limit=${limit}`);
+  },
+
+  updateStatus: async (id: string, data: {
+    status: string;
+    dashboardId?: string;
+    processingTime?: number;
+    errorMessage?: string;
+  }): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/prompts/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// Data Source API
+export interface DataSourceData {
+  id: string;
+  userId: string;
+  dashboardId?: string;
+  name: string;
+  type: string;
+  schema: unknown;
+  data: Record<string, unknown>[];
+  rowCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const dataSourceApi = {
+  getForDashboard: async (dashboardId: string): Promise<DataSourceData[]> => {
+    return apiRequest<DataSourceData[]>(`/api/data-sources/dashboard/${dashboardId}`);
+  },
+
+  get: async (id: string): Promise<DataSourceData> => {
+    return apiRequest<DataSourceData>(`/api/data-sources/${id}`);
+  },
+
+  save: async (data: {
+    dashboardId: string;
+    name: string;
+    type?: string;
+    schema: unknown;
+    data: Record<string, unknown>[];
+    sourceId?: string;
+  }): Promise<DataSourceData> => {
+    return apiRequest<DataSourceData>('/api/data-sources', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        rowCount: data.data.length,
+      }),
+    });
+  },
+
+  update: async (id: string, data: {
+    name?: string;
+    schema?: unknown;
+    data?: Record<string, unknown>[];
+    rowCount?: number;
+  }): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/data-sources/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/data-sources/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};

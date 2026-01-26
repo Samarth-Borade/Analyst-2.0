@@ -122,7 +122,7 @@ export function DashboardCanvas() {
     setDragOverIndex(null);
   }, []);
 
-  if (!currentPage || !filteredData) {
+  if (!currentPage) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground font-mono">
         No page selected
@@ -321,7 +321,7 @@ export function DashboardCanvas() {
                 <div className={cn("h-full", editMode && "pointer-events-none")}>
                   <ChartWrapper
                     config={{ ...chart, width: displayWidth, height: displayHeight }}
-                    data={filteredData}
+                    data={filteredData || []}
                     showControls={!editMode}
                   >
                     {(filteredChartData) => (

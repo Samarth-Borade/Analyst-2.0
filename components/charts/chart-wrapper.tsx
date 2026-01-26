@@ -48,6 +48,8 @@ export function ChartWrapper({
   isDragging = false,
   showControls = true,
 }: ChartWrapperProps) {
+  // Ensure data is always an array
+  const safeData = Array.isArray(data) ? data : [];
   // Filter states
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [filterValues, setFilterValues] = useState<string[]>([]);
@@ -59,14 +61,14 @@ export function ChartWrapper({
   const [showRange, setShowRange] = useState(false);
 
   // Get column information
-  const columns = useMemo(() => Object.keys(data[0] || {}), [data]);
+  const columns = useMemo(() => Object.keys(safeData[0] || {}), [safeData]);
   
   const numericColumns = useMemo(() => 
     columns.filter(col => {
-      const sample = data.slice(0, 10).map(row => row[col]);
+      const sample = safeData.slice(0, 10).map(row => row[col]);
       return sample.every(v => v === null || v === undefined || typeof v === "number" || !isNaN(Number(v)));
     }),
-    [columns, data]
+    [columns, safeData]
   );
   
   const categoricalColumns = useMemo(() => 
@@ -77,21 +79,21 @@ export function ChartWrapper({
   // Get unique values for filter column
   const uniqueValues = useMemo(() => {
     if (!filterColumn) return [];
-    const values = [...new Set(data.map(row => String(row[filterColumn])))];
+    const values = [...new Set(safeData.map(row => String(row[filterColumn])))];
     return values.sort();
-  }, [data, filterColumn]);
+  }, [safeData, filterColumn]);
 
   // Get min/max for range column
   const rangeMinMax = useMemo(() => {
-    if (!rangeColumn) return { min: 0, max: 100 };
-    const values = data.map(row => Number(row[rangeColumn]) || 0);
+    if (!rangeColumn || safeData.length === 0) return { min: 0, max: 100 };
+    const values = safeData.map(row => Number(row[rangeColumn]) || 0);
     return { min: Math.min(...values), max: Math.max(...values) };
-  }, [data, rangeColumn]);
+  }, [safeData, rangeColumn]);
 
   // Initialize range values when column changes
   const handleRangeColumnChange = (col: string) => {
     setRangeColumn(col);
-    const values = data.map(row => Number(row[col]) || 0);
+    const values = safeData.map(row => Number(row[col]) || 0);
     const min = Math.min(...values);
     const max = Math.max(...values);
     setRangeValues([min, max]);
@@ -99,7 +101,7 @@ export function ChartWrapper({
 
   // Filter data
   const filteredData = useMemo(() => {
-    let result = [...data];
+    let result = [...safeData];
     
     // Apply categorical filter
     if (filterColumn && filterValues.length > 0) {
@@ -115,7 +117,7 @@ export function ChartWrapper({
     }
     
     return result;
-  }, [data, filterColumn, filterValues, rangeColumn, rangeValues]);
+  }, [safeData, filterColumn, filterValues, rangeColumn, rangeValues]);
 
   const toggleFilterValue = (value: string) => {
     setFilterValues(prev => 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Check, Hash, Calendar, Type, BarChart3, Info } from "lucide-react";
+import { Hash, Calendar, Type, BarChart3, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { DataSchema } from "@/lib/store";
 
 interface DataPreviewProps {
@@ -100,11 +99,10 @@ export function DataPreview({
       </div>
 
       {/* Table */}
-      <ScrollArea className="h-[400px]">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-card z-10">
-              <tr className="border-b border-border">
+      <div className="h-[400px] overflow-auto">
+        <table className="w-full text-sm min-w-max">
+          <thead className="sticky top-0 bg-card z-10">
+            <tr className="border-b border-border">
                 {columns.map((column) => {
                   const isSelected = selectedColumns.includes(column);
                   const colInfo = getColumnInfo(column);
@@ -195,8 +193,7 @@ export function DataPreview({
               ))}
             </tbody>
           </table>
-        </div>
-      </ScrollArea>
+      </div>
 
       {/* Footer */}
       <div className="px-4 py-2 bg-muted/30 border-t border-border">

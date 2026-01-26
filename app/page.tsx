@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HomeView } from "@/components/home-view";
 import { UploadView } from "@/components/upload-view";
 import { DashboardView } from "@/components/dashboard-view";
@@ -8,10 +8,28 @@ import { RelationsView } from "@/components/relations-view";
 import { useDashboardStore } from "@/lib/store";
 
 export default function Home() {
-  const { currentView, theme, rawData, currentProjectId, setCurrentView, openProject, pages } =
+  const { currentView, theme, rawData, currentProjectId, setCurrentView, openProject, pages, initializeFromBackend } =
     useDashboardStore();
   
   const restoredRef = useRef(false);
+  const initializedRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
+
+  // Initialize from backend on first mount
+  useEffect(() => {
+    const init = async () => {
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+        try {
+          await initializeFromBackend();
+        } catch (error) {
+          console.error("Failed to initialize from backend:", error);
+        }
+        setIsReady(true);
+      }
+    };
+    init();
+  }, [initializeFromBackend]);
 
   // Apply theme to document
   useEffect(() => {
@@ -54,11 +72,20 @@ export default function Home() {
     if (rawData && rawData.length > 0 && currentView === "upload") {
       // Only switch to dashboard after analysis is complete (pages exist)
       const pageState = useDashboardStore.getState().pages;
-      if (pageState.length > 0) {
+      if (pageState && pageState.length > 0) {
         setCurrentView("dashboard");
       }
     }
   }, [rawData, currentView, setCurrentView]);
+
+  // Show loading state while initializing
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   // If no project selected, show home
   if (!currentProjectId) {

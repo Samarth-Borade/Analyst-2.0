@@ -44,15 +44,16 @@ model Dashboard {
   userId        String   @map("user_id")
   title         String
   description   String?
-  promptUsed    String   @map("prompt_used") @db.Text
+  promptUsed    String?  @map("prompt_used") @db.Text
   configuration Json
   isPublic      Boolean  @default(false) @map("is_public")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   
-  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shares  DashboardShare[]
-  prompts Prompt[]
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shares      DashboardShare[]
+  prompts     Prompt[]
+  dataSources DataSource[]
 
   @@map("dashboards")
 }
@@ -76,12 +77,18 @@ model Prompt {
 model DataSource {
   id               String   @id @default(uuid())
   userId           String   @map("user_id")
+  dashboardId      String?  @map("dashboard_id")
   name             String
-  type             String
-  connectionConfig Json     @map("connection_config")
+  type             String   @default("csv")
+  schema           Json?
+  data             Json?    // Store the actual data rows
+  rowCount         Int?     @map("row_count")
+  connectionConfig Json?    @map("connection_config")
   createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
   
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dashboard Dashboard? @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
 
   @@map("data_sources")
 }

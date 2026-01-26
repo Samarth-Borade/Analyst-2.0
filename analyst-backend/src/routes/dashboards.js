@@ -17,6 +17,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
         title: true,
         description: true,
         isPublic: true,
+        configuration: true,
         createdAt: true,
         updatedAt: true
       }

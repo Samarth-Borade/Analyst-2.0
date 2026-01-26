@@ -78,20 +78,53 @@ export async function POST(req: Request) {
 
     const { schema, sampleData, statistics } = await req.json();
 
+    // Limit schema to only column names and types (reduce token usage)
+    const compactSchema = {
+      columns: schema.columns?.map((c: { name: string; type: string }) => ({
+        name: c.name,
+        type: c.type,
+      })) || [],
+      rowCount: schema.rowCount,
+    };
+
+    // Limit statistics to prevent exceeding token limits
+    const compactStats = statistics ? {
+      rowCount: statistics.rowCount,
+      columnCount: statistics.columnCount,
+      columns: statistics.columns?.slice(0, 15).map((col: { name: string; type: string; numeric?: { min: number; max: number; mean: number }; categorical?: { uniqueCount: number; topValues: { value: string; count: number }[] } }) => ({
+        name: col.name,
+        type: col.type,
+        ...(col.numeric ? { 
+          numeric: { 
+            min: col.numeric.min, 
+            max: col.numeric.max, 
+            mean: Math.round(col.numeric.mean * 100) / 100 
+          } 
+        } : {}),
+        ...(col.categorical ? { 
+          categorical: { 
+            uniqueCount: col.categorical.uniqueCount,
+            topValues: col.categorical.topValues?.slice(0, 5) 
+          } 
+        } : {}),
+      })),
+      correlations: statistics.correlations?.slice(0, 3),
+    } : null;
+
     // Build optimized context - prefer statistics over raw samples
-    const dataContext = statistics 
+    const dataContext = compactStats 
       ? `Data Statistics (use these for insights):
-${JSON.stringify(statistics, null, 2)}
+${JSON.stringify(compactStats, null, 2)}
 
 Sample Data (3 representative rows):
 ${JSON.stringify(sampleData?.slice(0, 3) || [], null, 2)}`
-      : `Sample Data (first 5 rows):
-${JSON.stringify(sampleData, null, 2)}`;
+      : `Sample Data (first 3 rows):
+${JSON.stringify(sampleData?.slice(0, 3) || [], null, 2)}`;
 
     const prompt = `You are an expert data analyst. Based on the following dataset schema and statistics, generate an optimal dashboard configuration.
 
 Dataset Schema:
-${JSON.stringify(schema, null, 2)}
+${JSON.stringify(compactSchema, null, 2)}
 
 ${dataContext}
 
