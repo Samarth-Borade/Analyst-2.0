@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "description": "Backend for Analyst - AI-powered dashboard automation",
   "main": "src/app.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "gcp-build": "npx prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
