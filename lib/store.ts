@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authApi, dashboardApi, promptApi, getToken, userApi, dataSourceApi } from "./api";
+import { startFirebaseSync, stopAllFirebaseSyncs } from "./firebase-sync";
 
 export type ColumnType = "numeric" | "categorical" | "datetime" | "text";
 
@@ -119,6 +120,12 @@ export interface DataSource {
   name: string;
   data: Record<string, unknown>[];
   schema: DataSchema;
+  // Firebase connection info for live sync
+  firebaseConfig?: {
+    connectionId: string;
+    path: string;
+    databaseType: 'firestore' | 'realtime';
+  };
 }
 
 export interface DataRelation {
@@ -178,6 +185,7 @@ interface DashboardState {
   createProject: (name: string) => string;
   openProject: (projectId: string) => Promise<void>;
   deleteProject: (projectId: string) => void;
+  closeProject: () => void;
   saveCurrentProject: () => void;
   
   // Auth Actions
@@ -193,8 +201,9 @@ interface DashboardState {
   savePromptToBackend: (promptText: string, dashboardId?: string) => Promise<void>;
   
   // Data Source Actions
-  addDataSource: (name: string, data: Record<string, unknown>[], schema: DataSchema) => string;
+  addDataSource: (name: string, data: Record<string, unknown>[], schema: DataSchema, firebaseConfig?: DataSource['firebaseConfig']) => string;
   removeDataSource: (id: string) => void;
+  updateDataSourceData: (id: string, data: Record<string, unknown>[], schema?: DataSchema) => void;
   
   // Relation Actions
   addRelation: (relation: Omit<DataRelation, "id">) => void;
@@ -514,13 +523,15 @@ export const useDashboardStore = create<DashboardState>()(
         const currentState = get();
         const project = currentState.projects.find((p) => p.id === projectId);
         
+        console.log("🔓 openProject called:", projectId, "isAuthenticated:", currentState.isAuthenticated);
+        
         if (project) {
           // Validate pages and dataSources before setting
           const validPages = Array.isArray(project.pages) ? project.pages : [];
           const validDataSources = Array.isArray(project.dataSources) ? project.dataSources : [];
           const validRelations = Array.isArray(project.relations) ? project.relations : [];
           
-          console.log("Opening project:", projectId, {
+          console.log("📂 Opening project:", projectId, {
             pages: validPages.length,
             dataSources: validDataSources.length,
           });
@@ -529,17 +540,31 @@ export const useDashboardStore = create<DashboardState>()(
           let loadedDataSources: DataSource[] = validDataSources;
           if (currentState.isAuthenticated) {
             try {
+              console.log("📡 Fetching data sources from backend for:", projectId);
               const backendDataSources = await dataSourceApi.getForDashboard(projectId);
+              console.log("📥 Backend returned:", backendDataSources.length, "data sources");
+              
               loadedDataSources = backendDataSources.map((ds) => ({
                 id: ds.id,
                 name: ds.name,
                 data: Array.isArray(ds.data) ? ds.data : [],
                 schema: ds.schema as DataSchema,
+                // Map connectionConfig to firebaseConfig for live sync
+                firebaseConfig: ds.connectionConfig ? {
+                  connectionId: ds.connectionConfig.connectionId,
+                  path: ds.connectionConfig.path,
+                  databaseType: ds.connectionConfig.databaseType,
+                } : undefined,
               }));
-              console.log("Loaded", loadedDataSources.length, "data sources from backend");
+              console.log("✅ Loaded", loadedDataSources.length, "data sources, first has", loadedDataSources[0]?.data?.length, "rows");
+              if (loadedDataSources[0]?.firebaseConfig) {
+                console.log("🔥 First data source has Firebase config:", loadedDataSources[0].firebaseConfig.path);
+              }
             } catch (e) {
-              console.log("Failed to fetch data sources from backend, using local:", e);
+              console.error("❌ Failed to fetch data sources from backend:", e);
             }
+          } else {
+            console.log("⚠️ Not authenticated, skipping backend fetch");
           }
           
           // If no data sources loaded from backend, try to preserve existing data
@@ -557,6 +582,11 @@ export const useDashboardStore = create<DashboardState>()(
           
           const firstDataSource = loadedDataSources[0];
           
+          console.log("📦 Setting state with loaded data sources:");
+          loadedDataSources.forEach((ds, i) => {
+            console.log(`  [${i}] ${ds.name}: ${ds.data?.length || 0} rows`);
+          });
+          
           set({
             currentProjectId: projectId,
             dataSources: loadedDataSources,
@@ -571,12 +601,28 @@ export const useDashboardStore = create<DashboardState>()(
             aiMessage: null,
           });
           
-          // Force zustand to persist the state
-          if (typeof window !== "undefined") {
-            setTimeout(() => {
-              useDashboardStore.persist.rehydrate();
-            }, 50);
-          }
+          // Verify state was set correctly
+          const newState = get();
+          console.log("✅ State after set:");
+          console.log("  dataSources count:", newState.dataSources.length);
+          console.log("  first dataSource rows:", newState.dataSources[0]?.data?.length || 0);
+          console.log("  rawData rows:", newState.rawData?.length || 0);
+          
+          // Auto-restart Firebase syncs for data sources with firebase config
+          loadedDataSources.forEach((ds) => {
+            if (ds.firebaseConfig) {
+              console.log('🔄 Auto-restarting Firebase sync for:', ds.name);
+              startFirebaseSync(
+                ds.id,
+                ds.firebaseConfig.connectionId,
+                ds.firebaseConfig.path,
+                ds.firebaseConfig.databaseType
+              );
+            }
+          });
+          
+          // NOTE: Do NOT call persist.rehydrate() here - it would overwrite the data we just loaded
+          // The rehydrate was causing data to be reset to empty arrays from localStorage
         } else {
           console.warn("Project not found:", projectId);
         }
@@ -633,9 +679,38 @@ export const useDashboardStore = create<DashboardState>()(
         }
       },
 
-      addDataSource: (name, data, schema) => {
+      closeProject: () => {
+        const currentState = get();
+        const projectId = currentState.currentProjectId;
+        
+        // If project has no data sources, delete it instead of saving
+        if (projectId && currentState.dataSources.length === 0) {
+          // Delete the empty project
+          get().deleteProject(projectId);
+        } else {
+          // Save current project before closing
+          get().saveCurrentProject();
+          
+          // Stop all Firebase syncs when closing project
+          stopAllFirebaseSyncs();
+          
+          set({
+            currentProjectId: null,
+            rawData: null,
+            schema: null,
+            fileName: null,
+            dataSources: [],
+            relations: [],
+            pages: [],
+            currentPageId: null,
+            currentView: "home",
+          });
+        }
+      },
+
+      addDataSource: (name, data, schema, firebaseConfig) => {
         const id = `datasource-${Date.now()}`;
-        const newDataSource: DataSource = { id, name, data, schema };
+        const newDataSource: DataSource = { id, name, data, schema, firebaseConfig };
         
         set((state) => {
           // Check if a data source with the same name already exists
@@ -661,27 +736,48 @@ export const useDashboardStore = create<DashboardState>()(
           };
         });
         
-        // Save data source to backend
+        // Save data source to backend - this is CRITICAL for persistence
         const currentState = get();
+        console.log("💾 [CRITICAL] Saving data source to backend:", {
+          isAuthenticated: currentState.isAuthenticated,
+          currentProjectId: currentState.currentProjectId,
+          name,
+          dataLength: data.length,
+          hasFirebaseConfig: !!firebaseConfig,
+        });
+        
+        if (!currentState.isAuthenticated) {
+          console.error("❌ NOT AUTHENTICATED - data will NOT be saved to backend!");
+        }
+        
+        if (!currentState.currentProjectId) {
+          console.error("❌ NO PROJECT ID - data will NOT be saved to backend!");
+        }
+        
         if (currentState.isAuthenticated && currentState.currentProjectId) {
+          const isFirebase = name.includes('(Firebase)');
+          console.log("📤 Sending to backend API...");
           dataSourceApi.save({
             dashboardId: currentState.currentProjectId,
             name,
-            type: 'csv',
+            type: isFirebase ? 'firebase' : 'csv',
             schema,
             data,
             sourceId: id,
+            connectionConfig: firebaseConfig, // Save firebase config for auto-sync on reopen
           }).then((savedDs) => {
-            // Update local data source with backend ID
+            // Update local data source with backend ID (preserve firebaseConfig)
             set((state) => ({
               dataSources: state.dataSources.map((ds) =>
-                ds.id === id ? { ...ds, id: savedDs.id } : ds
+                ds.id === id ? { ...ds, id: savedDs.id, firebaseConfig } : ds
               ),
             }));
-            console.log("Data source saved to backend:", savedDs.id);
+            console.log("✅ Data source SAVED to backend:", savedDs.id, "rows:", savedDs.rowCount, "data stored:", Array.isArray(savedDs.data) ? savedDs.data.length : 'N/A');
           }).catch((err) => {
-            console.error("Failed to save data source to backend:", err);
+            console.error("❌ FAILED to save data source to backend:", err);
           });
+        } else {
+          console.warn("⚠️ Skipping backend save - auth:", currentState.isAuthenticated, "project:", currentState.currentProjectId);
         }
         
         get().saveCurrentProject();
@@ -703,6 +799,39 @@ export const useDashboardStore = create<DashboardState>()(
           };
         });
         get().saveCurrentProject();
+      },
+
+      updateDataSourceData: (id, data, schema) => {
+        console.log('🔄 updateDataSourceData called:', id, 'rows:', data.length);
+        set((state) => {
+          const dataSourceIndex = state.dataSources.findIndex((ds) => ds.id === id);
+          if (dataSourceIndex === -1) {
+            console.warn('⚠️ Data source not found:', id);
+            return state;
+          }
+          
+          const updatedDataSource = {
+            ...state.dataSources[dataSourceIndex],
+            data: [...data], // Create new array reference
+            schema: schema || state.dataSources[dataSourceIndex].schema,
+          };
+          
+          const newDataSources = [...state.dataSources];
+          newDataSources[dataSourceIndex] = updatedDataSource;
+          
+          // If this is the primary data source, also update rawData
+          const isPrimary = dataSourceIndex === 0;
+          console.log('🔄 Updating state, isPrimary:', isPrimary);
+          
+          return {
+            dataSources: newDataSources,
+            ...(isPrimary ? { 
+              rawData: [...data], // New array reference
+              schema: schema || state.schema,
+            } : {}),
+          };
+        });
+        console.log('✅ updateDataSourceData complete');
       },
 
       addRelation: (relation) => {

@@ -1,0 +1,82 @@
+{
+  "sales": {
+    "today": {
+      "totalRevenue": 38750,
+      "totalOrders": 164,
+      "averageOrderValue": 236,
+      "lastOrderTime": "2026-01-26T14:42:00"
+    },
+    "liveOrders": {
+      "order_1001": {
+        "product": "Laptop",
+        "category": "Electronics",
+        "quantity": 1,
+        "price": 850,
+        "paymentMethod": "card",
+        "status": "completed",
+        "timestamp": "2026-01-26T09:12:00"
+      },
+      "order_1002": {
+        "product": "Headphones",
+        "category": "Electronics",
+        "quantity": 2,
+        "price": 120,
+        "paymentMethod": "upi",
+        "status": "completed",
+        "timestamp": "2026-01-26T09:18:00"
+      },
+      "order_1003": {
+        "product": "Office Chair",
+        "category": "Furniture",
+        "quantity": 1,
+        "price": 240,
+        "paymentMethod": "card",
+        "status": "pending",
+        "timestamp": "2026-01-26T09:25:00"
+      },
+      "order_1004": {
+        "product": "Mechanical Keyboard",
+        "category": "Electronics",
+        "quantity": 1,
+        "price": 180,
+        "paymentMethod": "netbanking",
+        "status": "completed",
+        "timestamp": "2026-01-26T09:31:00"
+      },
+      "order_1005": {
+        "product": "Smart Watch",
+        "category": "Wearables",
+        "quantity": 1,
+        "price": 320,
+        "paymentMethod": "card",
+        "status": "cancelled",
+        "timestamp": "2026-01-26T09:40:00"
+      }
+    },
+    "monthlySummary": {
+      "January": {
+        "revenue": 985000,
+        "orders": 4120
+      },
+      "February": {
+        "revenue": 1042000,
+        "orders": 4385
+      }
+    },
+    "topProducts": {
+      "Laptop": {
+        "unitsSold": 320,
+        "revenue": 272000
+      },
+      "Headphones": {
+        "unitsSold": 540,
+        "revenue": 64800
+      },
+      "Smart Watch": {
+        "unitsSold": 290,
+        "revenue": 92800
+      }
+    },
+    "lastUpdated": 1706363000
+  }
+}

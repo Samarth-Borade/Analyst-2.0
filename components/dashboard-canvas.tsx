@@ -11,6 +11,11 @@ import { Button } from "@/components/ui/button";
 export function DashboardCanvas() {
   const { pages, currentPageId, rawData, filters, setCurrentPage, dataSources, updateChart, updatePage } = useDashboardStore();
   
+  // Debug: log when rawData changes
+  useEffect(() => {
+    console.log('📊 DashboardCanvas rawData updated:', rawData?.length, 'rows');
+  }, [rawData]);
+  
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null);

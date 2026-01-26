@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardCanvas } from "@/components/dashboard-canvas";
 import { DashboardHeader } from "@/components/dashboard-header";
@@ -8,6 +8,7 @@ import { PromptBar } from "@/components/prompt-bar";
 import { DataView } from "@/components/data-view";
 import { DataModelingView } from "@/components/data-modeling-view";
 import { useDashboardStore } from "@/lib/store";
+import { startFirebaseSync, isFirebaseSyncing } from "@/lib/firebase-sync";
 import { AlertTriangle, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
@@ -26,6 +27,47 @@ export function DashboardView({ onReset }: DashboardViewProps) {
   const { currentView, rawData, dataSources, pages } = useDashboardStore();
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+
+  // Auto-start Firebase sync for Firebase data sources when dashboard loads
+  useEffect(() => {
+    dataSources.forEach((ds) => {
+      // Check if it's a Firebase data source (either has config or name contains Firebase)
+      const isFirebaseSource = ds.firebaseConfig || ds.name.includes('(Firebase)');
+      
+      if (isFirebaseSource && !isFirebaseSyncing(ds.id)) {
+        // If we have firebase config, use it
+        if (ds.firebaseConfig) {
+          console.log('🔄 Auto-starting Firebase sync for:', ds.name);
+          startFirebaseSync(
+            ds.id,
+            ds.firebaseConfig.connectionId,
+            ds.firebaseConfig.path,
+            ds.firebaseConfig.databaseType
+          );
+        } else {
+          // Try to extract path from name (e.g., "sales/liveOrders (Firebase)" -> "sales/liveOrders")
+          const pathMatch = ds.name.match(/^(.+)\s*\(Firebase\)$/);
+          if (pathMatch) {
+            const path = pathMatch[1].trim();
+            // Get the first available Firebase connection
+            const { getConnections } = require('@/lib/firebase-connector');
+            const connections = getConnections();
+            if (connections.length > 0) {
+              console.log('🔄 Auto-starting Firebase sync (inferred) for:', ds.name, 'path:', path);
+              startFirebaseSync(
+                ds.id,
+                connections[0].id,
+                path,
+                connections[0].databaseType || 'realtime'
+              );
+            } else {
+              console.warn('⚠️ No Firebase connections available to start sync for:', ds.name);
+            }
+          }
+        }
+      }
+    });
+  }, [dataSources]);
 
   // Check if we have pages/charts but no data to display
   const hasCharts = pages.some(p => p.charts && p.charts.length > 0);

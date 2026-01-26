@@ -3,16 +3,17 @@
 import { useState } from "react";
 import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
 import { FirebaseConnector } from "@/components/firebase-connector";
-import { Moon, Sun, BarChart3, Sparkles, Zap, Shield, Upload, Database } from "lucide-react";
+import { Moon, Sun, BarChart3, Sparkles, Zap, Shield, Upload, Database, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardStore } from "@/lib/store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface UploadViewProps {
   onUploadComplete: () => void;
+  onBack?: () => void;
 }
 
-export function UploadView({ onUploadComplete }: UploadViewProps) {
+export function UploadView({ onUploadComplete, onBack }: UploadViewProps) {
   const { theme, toggleTheme } = useDashboardStore();
   const [activeTab, setActiveTab] = useState<"file" | "firebase">("file");
 
@@ -20,11 +21,18 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="h-14 border-b border-border px-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">AI</span>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <Button variant="ghost" size="icon" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-sm">AI</span>
+            </div>
+            <span className="font-semibold text-foreground">AI Analyst</span>
           </div>
-          <span className="font-semibold text-foreground">AI Analyst</span>
         </div>
         <Button variant="ghost" size="icon" onClick={toggleTheme}>
           {theme === "dark" ? (
@@ -64,7 +72,7 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
           </TabsContent>
           
           <TabsContent value="firebase">
-            <FirebaseConnector />
+            <FirebaseConnector onAnalysisComplete={onUploadComplete} />
           </TabsContent>
         </Tabs>
 

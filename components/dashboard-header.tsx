@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Moon, Sun, Download, Home, FileSpreadsheet, Plus, Database } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Moon, Sun, Download, Home, FileSpreadsheet, Plus, Database, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +12,8 @@ import {
 import { useDashboardStore } from "@/lib/store";
 import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
 import { UserButton } from "@/components/auth-modal";
+import { getActiveSyncs } from "@/lib/firebase-sync";
+import { Badge } from "@/components/ui/badge";
 
 interface DashboardHeaderProps {
   onReset: () => void;
@@ -20,6 +22,19 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ onReset }: DashboardHeaderProps) {
   const { theme, toggleTheme, fileName, setCurrentView } = useDashboardStore();
   const [showAddData, setShowAddData] = useState(false);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+
+  // Check for active Firebase syncs
+  useEffect(() => {
+    const checkSync = () => {
+      const syncs = getActiveSyncs();
+      setIsLiveSyncing(syncs.size > 0);
+    };
+    
+    checkSync();
+    const interval = setInterval(checkSync, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <>
@@ -36,6 +51,13 @@ export function DashboardHeader({ onReset }: DashboardHeaderProps) {
               <FileSpreadsheet className="h-4 w-4" />
               <span>{fileName}</span>
             </div>
+          )}
+          {isLiveSyncing && (
+            <Badge variant="outline" className="gap-1.5 text-green-600 border-green-600/50 bg-green-500/10">
+              <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+              <Zap className="h-3 w-3" />
+              Live
+            </Badge>
           )}
         </div>
 

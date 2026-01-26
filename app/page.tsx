@@ -8,7 +8,7 @@ import { RelationsView } from "@/components/relations-view";
 import { useDashboardStore } from "@/lib/store";
 
 export default function Home() {
-  const { currentView, theme, rawData, currentProjectId, setCurrentView, openProject, pages, initializeFromBackend } =
+  const { currentView, theme, rawData, currentProjectId, setCurrentView, openProject, pages, initializeFromBackend, closeProject } =
     useDashboardStore();
   
   const restoredRef = useRef(false);
@@ -94,7 +94,7 @@ export default function Home() {
 
   switch (currentView) {
     case "upload":
-      return <UploadView onUploadComplete={() => setCurrentView("dashboard")} />;
+      return <UploadView onUploadComplete={() => setCurrentView("dashboard")} onBack={closeProject} />;
     case "dashboard":
     case "data":
     case "data-modeling":

@@ -17,6 +17,8 @@ import {
   ChevronRight,
   Link2,
   AlertCircle,
+  Eye,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,19 +39,23 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useDashboardStore } from "@/lib/store";
+import { generateDataStatistics, getSmartSample } from "@/lib/data-utils";
 import {
   FirebaseConfig,
   FirebaseConnection,
   initializeFirebaseApp,
   testFirebaseConnection,
   fetchCollection,
+  fetchRealtimeDatabasePath,
   subscribeToCollection,
+  subscribeToRealtimeDatabasePath,
   inferSchemaFromDocuments,
   saveConnection,
   getConnections,
   deleteConnection,
   cleanupConnection,
 } from "@/lib/firebase-connector";
+import { startFirebaseSync, stopFirebaseSync, isFirebaseSyncing } from "@/lib/firebase-sync";
 
 interface LiveDataSource {
   connectionId: string;
@@ -57,9 +63,14 @@ interface LiveDataSource {
   isLive: boolean;
   lastUpdated: Date | null;
   rowCount: number;
+  databaseType: 'firestore' | 'realtime';
 }
 
-export function FirebaseConnector() {
+interface FirebaseConnectorProps {
+  onAnalysisComplete?: () => void;
+}
+
+export function FirebaseConnector({ onAnalysisComplete }: FirebaseConnectorProps) {
   const [connections, setConnections] = useState<FirebaseConnection[]>([]);
   const [showAddConnection, setShowAddConnection] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
@@ -68,6 +79,9 @@ export function FirebaseConnector() {
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [liveDataSources, setLiveDataSources] = useState<Map<string, LiveDataSource>>(new Map());
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<Record<string, unknown>[] | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Form state for new connection
   const [newConnection, setNewConnection] = useState<Partial<FirebaseConfig> & { name: string }>({
@@ -76,9 +90,11 @@ export function FirebaseConnector() {
     authDomain: "",
     projectId: "",
     appId: "",
+    databaseURL: "",
   });
+  const [databaseType, setDatabaseType] = useState<'firestore' | 'realtime'>('realtime');
 
-  const { addDataSource, dataSources } = useDashboardStore();
+  const { addDataSource, dataSources, setRawData, setSchema, setIsLoading, setPages, setAiMessage, updateDataSourceData } = useDashboardStore();
 
   // Load saved connections on mount
   useEffect(() => {
@@ -91,6 +107,12 @@ export function FirebaseConnector() {
       setError("Please fill in all required fields");
       return;
     }
+    
+    // Require databaseURL for Realtime Database
+    if (databaseType === 'realtime' && !newConnection.databaseURL) {
+      setError("Database URL is required for Realtime Database");
+      return;
+    }
 
     setIsConnecting(true);
     setError(null);
@@ -101,6 +123,7 @@ export function FirebaseConnector() {
         authDomain: newConnection.authDomain || `${newConnection.projectId}.firebaseapp.com`,
         projectId: newConnection.projectId,
         appId: newConnection.appId,
+        databaseURL: newConnection.databaseURL || undefined,
       };
 
       const result = await testFirebaseConnection(config);
@@ -114,6 +137,7 @@ export function FirebaseConnector() {
         name: newConnection.name,
         config,
         createdAt: new Date().toISOString(),
+        databaseType,
       };
 
       // Initialize the app
@@ -130,6 +154,7 @@ export function FirebaseConnector() {
         authDomain: "",
         projectId: "",
         appId: "",
+        databaseURL: "",
       });
       setShowAddConnection(false);
       setSelectedConnection(connection.id);
@@ -143,7 +168,7 @@ export function FirebaseConnector() {
   // Fetch collection data
   const handleFetchCollection = async () => {
     if (!selectedConnection || !collectionInput.trim()) {
-      setError("Please select a connection and enter a collection name");
+      setError("Please select a connection and enter a collection/path name");
       return;
     }
 
@@ -157,22 +182,45 @@ export function FirebaseConnector() {
       
       initializeFirebaseApp(selectedConnection, connection.config);
       
-      // Fetch data
-      const data = await fetchCollection(selectedConnection, collectionInput.trim());
+      // Fetch data based on database type
+      const dbType = (connection as any).databaseType || 'firestore';
+      let data: Record<string, unknown>[];
+      
+      if (dbType === 'realtime') {
+        data = await fetchRealtimeDatabasePath(selectedConnection, collectionInput.trim());
+      } else {
+        data = await fetchCollection(selectedConnection, collectionInput.trim());
+      }
       
       if (data.length === 0) {
-        setError("No documents found in this collection");
+        setError("No data found at this path/collection");
         return;
       }
 
       // Infer schema
       const schema = inferSchemaFromDocuments(data);
       
-      // Add as data source
+      // Store preview data
+      setPreviewData(data);
+      setShowPreview(true);
+      
+      // Set as raw data in store
+      setRawData(data, `${collectionInput.trim()} (Firebase)`);
+      setSchema(schema);
+      
+      // Store the path before clearing
+      const pathToSync = collectionInput.trim();
+      
+      // Add as data source WITH firebase config for auto-sync on reopen
       const sourceId = addDataSource(
-        `${collectionInput.trim()} (Firebase)`,
+        `${pathToSync} (Firebase)`,
         data,
-        schema
+        schema,
+        {
+          connectionId: selectedConnection,
+          path: pathToSync,
+          databaseType: dbType,
+        }
       );
 
       // Track this live data source
@@ -180,19 +228,115 @@ export function FirebaseConnector() {
         const next = new Map(prev);
         next.set(sourceId, {
           connectionId: selectedConnection,
-          collectionName: collectionInput.trim(),
+          collectionName: pathToSync,
           isLive: false,
           lastUpdated: new Date(),
           rowCount: data.length,
+          databaseType: dbType,
         });
         return next;
       });
+      
+      console.log('📦 Created data source:', sourceId, 'path:', pathToSync);
 
       setCollectionInput("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch collection");
+      setError(err instanceof Error ? err.message : "Failed to fetch data");
     } finally {
       setIsFetching(false);
+    }
+  };
+
+  // Handle generate dashboard
+  const handleGenerateDashboard = async () => {
+    if (!previewData || previewData.length === 0) return;
+    
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      // Generate schema and statistics
+      const schema = inferSchemaFromDocuments(previewData);
+      const statistics = generateDataStatistics(previewData);
+      const sampleData = getSmartSample(previewData, 3);
+      
+      // Call the analyze API to generate dashboard
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schema,
+          sampleData,
+          statistics,
+        }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Failed to analyze data (HTTP ${response.status})`;
+        try {
+          const bodyText = await response.text();
+          const bodyJson = JSON.parse(bodyText);
+          errorMessage = bodyJson?.details || bodyJson?.error || errorMessage;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.pages || !Array.isArray(result.pages)) {
+        throw new Error("Invalid response from analysis API");
+      }
+      
+      // Set the pages in store
+      setPages(result.pages);
+      setAiMessage(result.summary || "Dashboard generated successfully from Firebase data");
+      
+      // Save the project to backend immediately
+      const { saveCurrentProject } = useDashboardStore.getState();
+      saveCurrentProject();
+      console.log('💾 Project saved after generating dashboard');
+      
+      // Auto-start real-time sync for the Firebase data source
+      // Find the data source that was just created
+      console.log('🔍 Looking for live sources to sync, count:', liveDataSources.size);
+      const liveSourceEntry = Array.from(liveDataSources.entries())[0];
+      
+      if (liveSourceEntry) {
+        const [dataSourceId, liveSource] = liveSourceEntry;
+        console.log('🔗 Starting sync for:', dataSourceId, 'path:', liveSource.collectionName, 'connection:', liveSource.connectionId);
+        
+        const connection = connections.find(c => c.id === liveSource.connectionId);
+        if (connection) {
+          const syncStarted = startFirebaseSync(
+            dataSourceId,
+            liveSource.connectionId,
+            liveSource.collectionName,
+            liveSource.databaseType
+          );
+          
+          console.log('🚀 Sync started:', syncStarted);
+          
+          // Update live source state
+          setLiveDataSources(prev => {
+            const next = new Map(prev);
+            next.set(dataSourceId, { ...liveSource, isLive: true });
+            return next;
+          });
+        } else {
+          console.error('❌ Connection not found:', liveSource.connectionId);
+        }
+      } else {
+        console.warn('⚠️ No live source entry found');
+      }
+      
+      // Call onAnalysisComplete to navigate to dashboard
+      onAnalysisComplete?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate dashboard");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -204,59 +348,30 @@ export function FirebaseConnector() {
     const connection = connections.find(c => c.id === liveSource.connectionId);
     if (!connection) return;
 
-    if (liveSource.isLive) {
-      // Stop live sync
-      cleanupConnection(liveSource.connectionId);
+    if (liveSource.isLive || isFirebaseSyncing(dataSourceId)) {
+      // Stop live sync using global manager
+      stopFirebaseSync(dataSourceId);
       setLiveDataSources(prev => {
         const next = new Map(prev);
         next.set(dataSourceId, { ...liveSource, isLive: false });
         return next;
       });
     } else {
-      // Start live sync
-      initializeFirebaseApp(liveSource.connectionId, connection.config);
-      
-      subscribeToCollection(
+      // Start live sync using global manager
+      const started = startFirebaseSync(
+        dataSourceId,
         liveSource.connectionId,
         liveSource.collectionName,
-        (data) => {
-          // Update the data source with new data
-          const schema = inferSchemaFromDocuments(data);
-          // Note: In a real implementation, you'd update the existing data source
-          // For now, we'll just log the update
-          console.log("Live update received:", data.length, "documents");
-          
-          setLiveDataSources(prev => {
-            const next = new Map(prev);
-            const existing = next.get(dataSourceId);
-            if (existing) {
-              next.set(dataSourceId, {
-                ...existing,
-                lastUpdated: new Date(),
-                rowCount: data.length,
-              });
-            }
-            return next;
-          });
-        },
-        (error) => {
-          console.error("Live sync error:", error);
-          setLiveDataSources(prev => {
-            const next = new Map(prev);
-            const existing = next.get(dataSourceId);
-            if (existing) {
-              next.set(dataSourceId, { ...existing, isLive: false });
-            }
-            return next;
-          });
-        }
+        liveSource.databaseType
       );
-
-      setLiveDataSources(prev => {
-        const next = new Map(prev);
-        next.set(dataSourceId, { ...liveSource, isLive: true });
-        return next;
-      });
+      
+      if (started) {
+        setLiveDataSources(prev => {
+          const next = new Map(prev);
+          next.set(dataSourceId, { ...liveSource, isLive: true });
+          return next;
+        });
+      }
     }
   }, [liveDataSources, connections]);
 
@@ -345,7 +460,7 @@ export function FirebaseConnector() {
                   <div className="space-y-4">
                     <div className="flex gap-2">
                       <Input
-                        placeholder="Enter collection name (e.g., users, orders)"
+                        placeholder="Enter path (e.g., sales/liveOrders, users)"
                         value={collectionInput}
                         onChange={(e) => setCollectionInput(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleFetchCollection()}
@@ -364,6 +479,9 @@ export function FirebaseConnector() {
                         )}
                       </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Tip: Use specific paths like <code className="bg-muted px-1 rounded">sales/liveOrders</code> or <code className="bg-muted px-1 rounded">sales/topProducts</code> for better results
+                    </p>
                     {error && (
                       <div className="flex items-center gap-2 text-sm text-destructive">
                         <AlertCircle className="h-4 w-4" />
@@ -443,6 +561,85 @@ export function FirebaseConnector() {
         </div>
       )}
 
+      {/* Data Preview & Generate Dashboard */}
+      {showPreview && previewData && previewData.length > 0 && (
+        <Card className="border-primary">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Eye className="h-5 w-5 text-primary" />
+              Data Preview
+            </CardTitle>
+            <CardDescription>
+              {previewData.length} records loaded from Firebase
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Preview Table */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto max-h-64">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      {Object.keys(previewData[0] || {}).slice(0, 6).map((key) => (
+                        <th key={key} className="px-4 py-2 text-left font-medium">
+                          {key}
+                        </th>
+                      ))}
+                      {Object.keys(previewData[0] || {}).length > 6 && (
+                        <th className="px-4 py-2 text-left font-medium text-muted-foreground">
+                          +{Object.keys(previewData[0] || {}).length - 6} more
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewData.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="border-t">
+                        {Object.keys(previewData[0] || {}).slice(0, 6).map((key) => (
+                          <td key={key} className="px-4 py-2 truncate max-w-[150px]">
+                            {typeof row[key] === 'object' 
+                              ? JSON.stringify(row[key]).slice(0, 30) + '...'
+                              : String(row[key] ?? '')}
+                          </td>
+                        ))}
+                        {Object.keys(previewData[0] || {}).length > 6 && (
+                          <td className="px-4 py-2 text-muted-foreground">...</td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {previewData.length > 5 && (
+                <div className="px-4 py-2 bg-muted text-sm text-muted-foreground text-center">
+                  Showing 5 of {previewData.length} records
+                </div>
+              )}
+            </div>
+
+            {/* Generate Dashboard Button */}
+            <Button 
+              size="lg" 
+              className="w-full gap-2"
+              onClick={handleGenerateDashboard}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Generating Dashboard...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5" />
+                  Generate Dashboard
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Add Connection Dialog */}
       <Dialog open={showAddConnection} onOpenChange={setShowAddConnection}>
         <DialogContent className="max-w-lg">
@@ -465,6 +662,28 @@ export function FirebaseConnector() {
                 value={newConnection.name}
                 onChange={(e) => setNewConnection({ ...newConnection, name: e.target.value })}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Database Type *</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={databaseType === 'realtime' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setDatabaseType('realtime')}
+                >
+                  Realtime Database
+                </Button>
+                <Button
+                  type="button"
+                  variant={databaseType === 'firestore' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setDatabaseType('firestore')}
+                >
+                  Firestore
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -496,6 +715,21 @@ export function FirebaseConnector() {
                 onChange={(e) => setNewConnection({ ...newConnection, appId: e.target.value })}
               />
             </div>
+
+            {databaseType === 'realtime' && (
+              <div className="space-y-2">
+                <Label htmlFor="databaseURL">Database URL *</Label>
+                <Input
+                  id="databaseURL"
+                  placeholder="https://your-project-default-rtdb.firebaseio.com"
+                  value={newConnection.databaseURL}
+                  onChange={(e) => setNewConnection({ ...newConnection, databaseURL: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Find this in Firebase Console → Realtime Database → Data tab (the URL at the top)
+                </p>
+              </div>
+            )}
 
             <Accordion type="single" collapsible>
               <AccordionItem value="advanced">

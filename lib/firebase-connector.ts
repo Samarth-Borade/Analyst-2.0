@@ -12,6 +12,14 @@ import {
   QuerySnapshot,
   DocumentData
 } from 'firebase/firestore';
+import {
+  getDatabase,
+  ref,
+  get,
+  onValue,
+  Database,
+  off
+} from 'firebase/database';
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -20,6 +28,7 @@ export interface FirebaseConfig {
   storageBucket?: string;
   messagingSenderId?: string;
   appId: string;
+  databaseURL?: string; // For Realtime Database
 }
 
 export interface FirebaseConnection {
@@ -27,6 +36,7 @@ export interface FirebaseConnection {
   name: string;
   config: FirebaseConfig;
   createdAt: string;
+  databaseType?: 'firestore' | 'realtime';
 }
 
 export interface CollectionInfo {
@@ -64,6 +74,15 @@ export function getFirestoreInstance(connectionId: string): Firestore | null {
 }
 
 /**
+ * Get Realtime Database instance for a connection
+ */
+export function getRealtimeDatabaseInstance(connectionId: string): Database | null {
+  const app = activeApps.get(connectionId);
+  if (!app) return null;
+  return getDatabase(app);
+}
+
+/**
  * Test a Firebase connection by trying to access Firestore
  */
 export async function testFirebaseConnection(config: FirebaseConfig): Promise<{ 
@@ -92,7 +111,7 @@ export async function testFirebaseConnection(config: FirebaseConfig): Promise<{
 }
 
 /**
- * Fetch all documents from a collection
+ * Fetch all documents from a Firestore collection
  */
 export async function fetchCollection(
   connectionId: string, 
@@ -109,6 +128,150 @@ export async function fetchCollection(
     _id: doc.id,
     ...doc.data()
   }));
+}
+
+/**
+ * Flatten nested objects for better tabular representation
+ */
+function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  
+  for (const key in obj) {
+    const value = obj[key];
+    const newKey = prefix ? `${prefix}_${key}` : key;
+    
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      // Check if it's a "leaf" object (no nested objects inside)
+      const hasNestedObjects = Object.values(value as Record<string, unknown>).some(
+        v => v !== null && typeof v === 'object' && !Array.isArray(v)
+      );
+      
+      if (!hasNestedObjects) {
+        // Flatten leaf objects
+        Object.assign(result, flattenObject(value as Record<string, unknown>, newKey));
+      } else {
+        // Keep deeply nested objects as JSON string for now
+        result[newKey] = JSON.stringify(value);
+      }
+    } else {
+      result[newKey] = value;
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Convert nested Firebase data to tabular format
+ */
+function convertToTabular(data: unknown, parentKey: string = ''): Record<string, unknown>[] {
+  if (Array.isArray(data)) {
+    return data.map((item, index) => {
+      if (typeof item === 'object' && item !== null) {
+        return { _id: String(index), ...flattenObject(item as Record<string, unknown>) };
+      }
+      return { _id: String(index), value: item };
+    });
+  }
+  
+  if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    
+    // Check if all values are objects (collection-like structure)
+    const objectValues = keys.filter(k => 
+      obj[k] !== null && typeof obj[k] === 'object' && !Array.isArray(obj[k])
+    );
+    
+    // If most values are objects, treat each as a row
+    if (objectValues.length > 0 && objectValues.length >= keys.length * 0.5) {
+      return keys.map(key => {
+        const value = obj[key];
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          return { _id: key, ...flattenObject(value as Record<string, unknown>) };
+        }
+        return { _id: key, value };
+      });
+    }
+    
+    // Otherwise, flatten the single object
+    return [{ _id: parentKey || 'root', ...flattenObject(obj) }];
+  }
+  
+  return [{ _id: 'root', value: data }];
+}
+
+/**
+ * Fetch data from a Realtime Database path
+ */
+export async function fetchRealtimeDatabasePath(
+  connectionId: string,
+  path: string
+): Promise<Record<string, unknown>[]> {
+  const db = getRealtimeDatabaseInstance(connectionId);
+  if (!db) throw new Error('Firebase Realtime Database not initialized');
+  
+  const dbRef = ref(db, path);
+  const snapshot = await get(dbRef);
+  
+  if (!snapshot.exists()) {
+    return [];
+  }
+  
+  const data = snapshot.val();
+  return convertToTabular(data, path.split('/').pop() || 'data');
+}
+
+/**
+ * Subscribe to real-time updates from a Realtime Database path
+ */
+export function subscribeToRealtimeDatabasePath(
+  connectionId: string,
+  path: string,
+  onUpdate: (data: Record<string, unknown>[]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  const db = getRealtimeDatabaseInstance(connectionId);
+  if (!db) throw new Error('Firebase Realtime Database not initialized');
+  
+  const listenerId = `${connectionId}-rtdb-${path}`;
+  const dbRef = ref(db, path);
+  
+  console.log('🔌 Setting up Firebase listener for:', path);
+  
+  // Unsubscribe from existing listener if any
+  if (activeListeners.has(listenerId)) {
+    console.log('♻️ Cleaning up existing listener');
+    activeListeners.get(listenerId)!();
+  }
+  
+  const callback = (snapshot: any) => {
+    console.log('📡 Firebase snapshot received for:', path, 'exists:', snapshot.exists());
+    if (!snapshot.exists()) {
+      onUpdate([]);
+      return;
+    }
+    
+    const data = snapshot.val();
+    console.log('📥 Raw Firebase data:', data);
+    const result = convertToTabular(data, path.split('/').pop() || 'data');
+    console.log('📊 Converted to tabular:', result.length, 'rows');
+    onUpdate(result);
+  };
+  
+  const errorCallback = (error: Error) => {
+    console.error('Realtime Database listener error:', error);
+    onError?.(error);
+  };
+  
+  onValue(dbRef, callback, errorCallback);
+  
+  const unsubscribe = () => {
+    off(dbRef);
+  };
+  
+  activeListeners.set(listenerId, unsubscribe);
+  return unsubscribe;
 }
 
 /**

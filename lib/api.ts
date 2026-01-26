@@ -32,18 +32,33 @@ async function apiRequest<T>(
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  console.log(`🌐 API Request: ${options.method || 'GET'} ${endpoint}`);
+  
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error('❌ API Response not JSON:', text.slice(0, 200));
+      throw new Error('Invalid JSON response from server');
+    }
 
-  if (!response.ok) {
-    throw new Error(data.error || 'API request failed');
+    if (!response.ok) {
+      console.error('❌ API Error:', response.status, data);
+      throw new Error(data.error || `API request failed (${response.status})`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ API Request failed:', endpoint, error);
+    throw error;
   }
-
-  return data;
 }
 
 // Auth API
@@ -224,13 +239,32 @@ export interface DataSourceData {
   schema: unknown;
   data: Record<string, unknown>[];
   rowCount: number;
+  connectionConfig?: {
+    connectionId: string;
+    path: string;
+    databaseType: 'firestore' | 'realtime';
+  };
   createdAt: string;
   updatedAt: string;
 }
 
 export const dataSourceApi = {
   getForDashboard: async (dashboardId: string): Promise<DataSourceData[]> => {
-    return apiRequest<DataSourceData[]>(`/api/data-sources/dashboard/${dashboardId}`);
+    console.log('📡 API: Fetching data sources for dashboard:', dashboardId);
+    const result = await apiRequest<DataSourceData[]>(`/api/data-sources/dashboard/${dashboardId}`);
+    console.log('📥 API: Got', result.length, 'data sources');
+    result.forEach((ds, i) => {
+      console.log(`  [${i}] ${ds.name}:`);
+      console.log(`      rowCount: ${ds.rowCount}`);
+      console.log(`      data type: ${typeof ds.data}`);
+      console.log(`      data is null: ${ds.data === null}`);
+      console.log(`      data is array: ${Array.isArray(ds.data)}`);
+      console.log(`      data length: ${Array.isArray(ds.data) ? ds.data.length : 'N/A'}`);
+      if (ds.data && !Array.isArray(ds.data)) {
+        console.log(`      data preview:`, JSON.stringify(ds.data).slice(0, 200));
+      }
+    });
+    return result;
   },
 
   get: async (id: string): Promise<DataSourceData> => {
@@ -244,14 +278,22 @@ export const dataSourceApi = {
     schema: unknown;
     data: Record<string, unknown>[];
     sourceId?: string;
+    connectionConfig?: {
+      connectionId: string;
+      path: string;
+      databaseType: 'firestore' | 'realtime';
+    };
   }): Promise<DataSourceData> => {
-    return apiRequest<DataSourceData>('/api/data-sources', {
+    console.log('💾 API: Saving data source:', data.name, 'rows:', data.data.length, 'hasFirebaseConfig:', !!data.connectionConfig);
+    const result = await apiRequest<DataSourceData>('/api/data-sources', {
       method: 'POST',
       body: JSON.stringify({
         ...data,
         rowCount: data.data.length,
       }),
     });
+    console.log('✅ API: Saved, backend returned rowCount:', result.rowCount, 'data length:', Array.isArray(result.data) ? result.data.length : 'not array');
+    return result;
   },
 
   update: async (id: string, data: {

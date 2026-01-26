@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 // Get all data sources for a dashboard
 router.get('/dashboard/:dashboardId', authMiddleware, async (req, res, next) => {
   try {
+    console.log('Fetching data sources for dashboard:', req.params.dashboardId, 'user:', req.user.id);
     const dataSources = await prisma.dataSource.findMany({
       where: {
         dashboardId: req.params.dashboardId,
@@ -16,8 +17,20 @@ router.get('/dashboard/:dashboardId', authMiddleware, async (req, res, next) => 
       },
       orderBy: { createdAt: 'desc' },
     });
+    console.log('Found', dataSources.length, 'data sources');
+    dataSources.forEach((ds, i) => {
+      console.log(`  [${i}] ${ds.name}:`);
+      console.log(`      id: ${ds.id}`);
+      console.log(`      dashboardId: ${ds.dashboardId}`);
+      console.log(`      rowCount: ${ds.rowCount}`);
+      console.log(`      data type: ${typeof ds.data}`);
+      console.log(`      data is null: ${ds.data === null}`);
+      console.log(`      data is array: ${Array.isArray(ds.data)}`);
+      console.log(`      data length: ${Array.isArray(ds.data) ? ds.data.length : 'N/A'}`);
+    });
     res.json(dataSources);
   } catch (error) {
+    console.error('Error fetching data sources:', error);
     next(error);
   }
 });
@@ -45,9 +58,14 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
 // Create or update data source
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
-    const { dashboardId, name, type, schema, data, rowCount, sourceId } = req.body;
+    const { dashboardId, name, type, schema, data, rowCount, sourceId, connectionConfig } = req.body;
     
-    console.log('Saving data source:', { dashboardId, name, dataLength: Array.isArray(data) ? data.length : 0 });
+    console.log('Saving data source:', { 
+      dashboardId, 
+      name, 
+      dataLength: Array.isArray(data) ? data.length : 0,
+      hasConnectionConfig: !!connectionConfig 
+    });
 
     // Check if a data source with same name exists for this dashboard
     const existing = await prisma.dataSource.findFirst({
@@ -67,9 +85,10 @@ router.post('/', authMiddleware, async (req, res, next) => {
           schema,
           data,
           rowCount: rowCount || (Array.isArray(data) ? data.length : 0),
+          connectionConfig: connectionConfig || existing.connectionConfig,
         },
       });
-      console.log('Updated existing data source:', updated.id);
+      console.log('Updated existing data source:', updated.id, 'rows:', updated.rowCount);
       return res.json(updated);
     }
 
@@ -83,10 +102,11 @@ router.post('/', authMiddleware, async (req, res, next) => {
         schema,
         data,
         rowCount: rowCount || (Array.isArray(data) ? data.length : 0),
+        connectionConfig: connectionConfig || null,
       },
     });
 
-    console.log('Created new data source:', dataSource.id);
+    console.log('Created new data source:', dataSource.id, 'rows:', dataSource.rowCount);
     res.status(201).json(dataSource);
   } catch (error) {
     console.error('Error saving data source:', error);
@@ -137,6 +157,44 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
     }
 
     res.json({ message: 'Data source deleted' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Debug endpoint - list all data sources
+router.get('/debug/all', authMiddleware, async (req, res, next) => {
+  try {
+    const all = await prisma.dataSource.findMany({
+      where: { userId: req.user.id },
+      select: {
+        id: true,
+        name: true,
+        dashboardId: true,
+        rowCount: true,
+        type: true,
+        createdAt: true,
+      }
+    });
+    
+    // Also get with data to check if it's stored
+    const withData = await prisma.dataSource.findMany({
+      where: { userId: req.user.id },
+      take: 5,
+    });
+    
+    res.json({
+      count: all.length,
+      sources: all,
+      dataCheck: withData.map(ds => ({
+        id: ds.id,
+        name: ds.name,
+        dataType: typeof ds.data,
+        dataIsArray: Array.isArray(ds.data),
+        dataLength: Array.isArray(ds.data) ? ds.data.length : null,
+        dataPreview: Array.isArray(ds.data) ? ds.data.slice(0, 1) : ds.data,
+      }))
+    });
   } catch (error) {
     next(error);
   }
