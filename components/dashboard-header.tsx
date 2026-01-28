@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Moon, Sun, Download, Home, FileSpreadsheet, Plus, Database, Zap } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Moon, Sun, Download, Home, FileSpreadsheet, Plus, Database, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,9 +20,10 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ onReset }: DashboardHeaderProps) {
-  const { theme, toggleTheme, fileName, setCurrentView } = useDashboardStore();
+  const { theme, toggleTheme, fileName, setCurrentView, pages, currentPageId, setCurrentPage } = useDashboardStore();
   const [showAddData, setShowAddData] = useState(false);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Check for active Firebase syncs
   useEffect(() => {
@@ -35,6 +36,139 @@ export function DashboardHeader({ onReset }: DashboardHeaderProps) {
     const interval = setInterval(checkSync, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Export dashboard as PDF with all pages
+  const exportToPDF = useCallback(async () => {
+    if (pages.length === 0) {
+      alert("No pages to export");
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      // Dynamic import to avoid SSR issues
+      const { toPng } = await import("html-to-image");
+      const { jsPDF } = await import("jspdf");
+
+      // Find the dashboard canvas element for current page first
+      const canvasElement = document.querySelector('.dashboard-canvas-content') as HTMLElement;
+      
+      if (!canvasElement) {
+        alert("Could not find dashboard content to export. Make sure you're on the dashboard view.");
+        setIsExporting(false);
+        return;
+      }
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const contentWidth = pageWidth - (margin * 2);
+      const titleHeight = 15;
+      const contentHeight = pageHeight - (margin * 2) - titleHeight;
+
+      // Store original page
+      const originalPageId = currentPageId;
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Switch to this page and wait for render
+        setCurrentPage(page.id);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Re-query the canvas element after page switch
+        const currentCanvasElement = document.querySelector('.dashboard-canvas-content') as HTMLElement;
+        
+        if (!currentCanvasElement) {
+          console.warn(`Could not find canvas for page: ${page.name}`);
+          continue;
+        }
+
+        // Add new page if not first
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        // Add page title with styling
+        pdf.setFontSize(18);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(30, 30, 30);
+        
+        // Page title
+        const pageTitle = page.name || `Page ${i + 1}`;
+        pdf.text(pageTitle, pageWidth / 2, margin + 8, { align: "center" });
+        
+        // Add a subtle line under the title
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.5);
+        pdf.line(margin, margin + titleHeight - 2, pageWidth - margin, margin + titleHeight - 2);
+
+        // Page number
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`Page ${i + 1} of ${pages.length}`, pageWidth - margin, pageHeight - 5, { align: "right" });
+
+        // Capture using html-to-image (better CSS support)
+        const dataUrl = await toPng(currentCanvasElement, {
+          quality: 1,
+          pixelRatio: 2,
+          backgroundColor: theme === "dark" ? "#1a1a1a" : "#ffffff",
+          skipFonts: true,
+          filter: (node) => {
+            // Skip problematic elements if needed
+            return true;
+          },
+        });
+
+        // Create an image to get dimensions
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+
+        // Calculate image dimensions to fit the page
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const ratio = Math.min(contentWidth / imgWidth, contentHeight / imgHeight);
+        const finalWidth = imgWidth * ratio;
+        const finalHeight = imgHeight * ratio;
+
+        // Center the image
+        const xOffset = margin + (contentWidth - finalWidth) / 2;
+        const yOffset = margin + titleHeight + (contentHeight - finalHeight) / 2;
+
+        // Add the image to PDF
+        pdf.addImage(dataUrl, "PNG", xOffset, yOffset, finalWidth, finalHeight);
+      }
+
+      // Restore original page
+      if (originalPageId) {
+        setCurrentPage(originalPageId);
+      }
+
+      // Generate filename
+      const dashboardName = fileName?.replace(/\.[^/.]+$/, "") || "dashboard";
+      const timestamp = new Date().toISOString().split("T")[0];
+      pdf.save(`${dashboardName}_${timestamp}.pdf`);
+
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`Failed to export PDF: ${errorMessage}`);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [pages, currentPageId, setCurrentPage, fileName, theme]);
 
   return (
     <>
@@ -96,8 +230,19 @@ export function DashboardHeader({ onReset }: DashboardHeaderProps) {
               <Moon className="h-4 w-4" />
             )}
           </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <Download className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={exportToPDF}
+            disabled={isExporting}
+            className="h-9 w-9"
+            title="Download dashboard as PDF"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
           </Button>
           <Button
             variant="ghost"

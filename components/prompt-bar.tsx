@@ -32,9 +32,23 @@ export function PromptBar() {
     aiMessage,
     setAiMessage,
     addToPromptHistory,
+    pendingPrompt,
+    setPendingPrompt,
   } = useDashboardStore();
 
   const currentPage = pages.find((p) => p.id === currentPageId);
+
+  // Listen for pending prompts from chart picker
+  useEffect(() => {
+    if (pendingPrompt) {
+      setPrompt(pendingPrompt);
+      setPendingPrompt(null);
+      // Focus the input
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [pendingPrompt, setPendingPrompt]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

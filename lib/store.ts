@@ -180,6 +180,9 @@ interface DashboardState {
   // Data Preview (for column selection during upload)
   previewData: Record<string, unknown>[] | null;
   selectedColumns: string[];
+  
+  // Pending prompt from chart picker
+  pendingPrompt: string | null;
 
   // Project Actions
   createProject: (name: string) => string;
@@ -237,6 +240,9 @@ interface DashboardState {
   setSelectedColumns: (columns: string[]) => void;
   toggleColumn: (column: string) => void;
   
+  // Pending Prompt Actions
+  setPendingPrompt: (prompt: string | null) => void;
+  
   reset: () => void;
 }
 
@@ -261,6 +267,7 @@ const initialState = {
   currentView: "home" as const,
   previewData: null as Record<string, unknown>[] | null,
   selectedColumns: [] as string[],
+  pendingPrompt: null as string | null,
 };
 
 export const useDashboardStore = create<DashboardState>()(
@@ -987,6 +994,9 @@ export const useDashboardStore = create<DashboardState>()(
             ? state.selectedColumns.filter((c) => c !== column)
             : [...state.selectedColumns, column],
         })),
+      
+      // Pending Prompt Actions
+      setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
 
       reset: () =>
         set({
