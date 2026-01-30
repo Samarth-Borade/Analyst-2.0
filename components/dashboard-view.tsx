@@ -122,7 +122,7 @@ export function DashboardView({ onReset }: DashboardViewProps) {
       )}
       
       <div className="flex-1 flex overflow-hidden">
-        <DashboardSidebar />
+        {currentView !== "data-modeling" && <DashboardSidebar />}
         {renderContent()}
       </div>
       {currentView === "dashboard" && <PromptBar />}

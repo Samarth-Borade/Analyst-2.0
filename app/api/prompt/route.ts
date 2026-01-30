@@ -68,6 +68,9 @@ const updateSchema = z.object({
     "add_filter",
     "sort_data",
     "filter_data",
+    // Data transformation actions
+    "transform_data",
+    "create_relation",
     "reject", // For requests that violate data ethics or are impossible
   ]),
   // For reject action - explain why
@@ -212,7 +215,44 @@ const updateSchema = z.object({
       values: z.array(z.string()),
     })
     .optional(),
+  // Data transformation action
+  dataTransform: z
+    .object({
+      operation: z.enum([
+        "remove_nulls",      // Remove rows with null values in specified column
+        "fill_nulls",        // Fill null values with a default
+        "rename_column",     // Rename a column
+        "change_type",       // Change column data type  
+        "create_calculated", // Create a calculated column
+        "filter_rows",       // Filter rows based on condition
+        "aggregate",         // Group and aggregate data
+        "merge_columns",     // Combine multiple columns
+      ]),
+      targetDataSource: z.string().optional(),
+      column: z.string().optional(),
+      columns: z.array(z.string()).optional(),
+      newName: z.string().optional(),
+      newType: z.enum(["numeric", "categorical", "datetime", "text"]).optional(),
+      fillValue: z.union([z.string(), z.number()]).optional(),
+      formula: z.string().optional(),
+      condition: z.string().optional(),
+      groupBy: z.string().optional(),
+      aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
+    })
+    .optional(),
+  // Create relationship between tables
+  relationCreate: z
+    .object({
+      sourceTable: z.string(),
+      targetTable: z.string(),
+      sourceColumn: z.string(),
+      targetColumn: z.string(),
+      cardinality: z.enum(["one-to-one", "one-to-many", "many-to-one", "many-to-many"]),
+    })
+    .optional(),
   message: z.string(),
+  // AI-generated follow-up question suggestions
+  suggestedQuestions: z.array(z.string()).max(3).optional(),
 });
 
 // Helper function to extract JSON from markdown code blocks
@@ -240,12 +280,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const { prompt, currentDashboard, schema } = await req.json();
+    const { prompt, currentDashboard, schema, chatHistory = [] } = await req.json();
 
     // Get the current page ID and name for context
     const currentPageId = currentDashboard?.currentPageId;
     const currentPage = currentDashboard?.pages?.find((p: { id: string }) => p.id === currentPageId);
     const currentPageName = currentPage?.name || "Unknown";
+
+    // Format chat history for context
+    const conversationContext = chatHistory.length > 0 
+      ? `\n=== CONVERSATION HISTORY (for context) ===\n${chatHistory.map((msg: { role: string; content: string; action?: string }) => 
+          `${msg.role.toUpperCase()}: ${msg.content}${msg.action ? ` [Action: ${msg.action}]` : ''}`
+        ).join('\n')}\n=== END CONVERSATION HISTORY ===\n`
+      : '';
 
     // Compress dashboard for LLM context (reduces tokens significantly)
     const compressedDashboard = compressDashboardForLLM(currentDashboard);
@@ -293,6 +340,18 @@ export async function POST(req: Request) {
 
     const systemPrompt = `You are an AI assistant that helps users modify their data dashboards. 
 Based on the user's natural language request, determine what action to take and return the appropriate update configuration.
+${conversationContext}
+=== CONVERSATIONAL CONTEXT RULES ===
+- Use the conversation history above to understand context and references
+- If user says "make it bigger" or "change that one", refer to the LAST chart/action mentioned
+- If user says "show me the same data but by region", apply to the most recently created/modified chart
+- Support multi-step requests like "First add a bar chart, then make it blue" - execute the full sequence
+- When user references "that chart", "the same one", "it", etc., use context to identify which chart
+
+=== DATA INSIGHTS ===
+- In your "message" field, include a brief insight about the data when relevant
+- Example: "Added sales by region chart. 💡 Tip: The West region appears to have the highest values."
+- Keep insights short (1 sentence) and only add when genuinely useful
 
 === DATA ETHICS & INTEGRITY RULES (CRITICAL) ===
 
@@ -576,6 +635,69 @@ MOVING/REORDERING CHARTS:
 - x ranges from 0-3 (column position)
 - y represents row position (0, 1, 2, etc.)
 
+=== DATA TRANSFORMATION (Advanced) ===
+When user asks to clean, transform, or modify data structure, use action: "transform_data" with dataTransform object:
+
+Example - Remove null values:
+{
+  "action": "transform_data",
+  "dataTransform": {
+    "operation": "remove_nulls",
+    "column": "Sales"
+  },
+  "message": "Removed rows with null values in the Sales column",
+  "suggestedQuestions": ["Fill nulls with average", "Show data summary"]
+}
+
+Example - Rename column:
+{
+  "action": "transform_data",
+  "dataTransform": {
+    "operation": "rename_column",
+    "column": "old_name",
+    "newName": "new_name"
+  },
+  "message": "Renamed column 'old_name' to 'new_name'"
+}
+
+Example - Change column type:
+{
+  "action": "transform_data",
+  "dataTransform": {
+    "operation": "change_type",
+    "column": "Date",
+    "newType": "datetime"
+  },
+  "message": "Changed 'Date' column type to datetime"
+}
+
+Example - Create calculated column:
+{
+  "action": "transform_data",
+  "dataTransform": {
+    "operation": "create_calculated",
+    "newName": "Profit_Margin",
+    "formula": "Profit / Sales * 100"
+  },
+  "message": "Created calculated column 'Profit_Margin' = Profit / Sales * 100"
+}
+
+=== DATA RELATIONSHIPS ===
+When user asks to join tables, create relationships, or link data:
+
+Example - Create relationship:
+{
+  "action": "create_relation",
+  "relationCreate": {
+    "sourceTable": "sales_data",
+    "targetTable": "customers_data",
+    "sourceColumn": "Customer_ID",
+    "targetColumn": "ID",
+    "cardinality": "many-to-one"
+  },
+  "message": "Created relationship between sales_data and customers_data on Customer_ID → ID (Many to One)"
+}
+
 - Chart/Page IDs must be unique, use format: "chart-" + random string or "page-" + random string
 - Only use column names that exist in the schema
 - For KPI charts: only set yAxis (no xAxis)
@@ -589,6 +711,20 @@ FINAL REMINDER - PAGE CONTEXT:
 ⚠️ The user is currently on page "${currentPageName}" (ID: ${currentPageId}).
 ⚠️ Unless the user EXPLICITLY mentions another page by name (e.g., "on Overview page", "on the first page", "on all pages"), you MUST use targetPageId: "${currentPageId}"
 ⚠️ If there are multiple charts of the same type on the current page, pick the first one or ask for clarification in the message.
+
+=== SUGGESTED FOLLOW-UP QUESTIONS ===
+After completing the user's request, include a "suggestedQuestions" array with 2-3 helpful follow-up prompts the user might want to ask next.
+
+These should be:
+- Relevant to what the user just did (e.g., if they added a bar chart, suggest customizing it)
+- Specific to their data columns and current dashboard state
+- Action-oriented and concise (under 10 words each)
+- Different from what they just asked
+
+Examples:
+- After adding a chart: ["Add a trend line", "Group by region", "Change to pie chart"]
+- After changing colors: ["Make it larger", "Add a title", "Show top 10 only"]
+- After sorting: ["Filter by category", "Add another column", "Export to table"]
 
 Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
 

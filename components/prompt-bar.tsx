@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, Loader2, MessageSquare, X } from "lucide-react";
+import { Send, Sparkles, Loader2, MessageSquare, X, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ export function PromptBar() {
   const [prompt, setPrompt] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -34,6 +35,10 @@ export function PromptBar() {
     addToPromptHistory,
     pendingPrompt,
     setPendingPrompt,
+    suggestedQuestions,
+    setSuggestedQuestions,
+    chatHistory,
+    addToChatHistory,
   } = useDashboardStore();
 
   const currentPage = pages.find((p) => p.id === currentPageId);
@@ -64,18 +69,22 @@ export function PromptBar() {
   const handleSubmit = async () => {
     if (!prompt.trim() || isProcessing || !schema) return;
 
+    const userPrompt = prompt.trim();
     setIsProcessing(true);
-    addToPromptHistory(prompt);
+    addToPromptHistory(userPrompt);
     setAiMessage("Processing your request...");
+    setSuggestedQuestions([]); // Clear previous suggestions
+    setShowExamples(false); // Hide examples while processing
 
     try {
       const response = await fetch("/api/prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
+          prompt: userPrompt,
           currentDashboard: { pages, currentPageId },
           schema,
+          chatHistory: chatHistory.slice(-6), // Send last 6 messages for context
         }),
       });
 
@@ -158,6 +167,21 @@ export function PromptBar() {
           }
           break;
 
+        case "transform_data":
+          // Data transformation requested - show message with instructions
+          console.log(`[Transform] Operation: ${result.dataTransform?.operation}`);
+          // The actual transformation would be handled by a separate data processing function
+          // For now, we inform the user about the requested transformation
+          break;
+
+        case "create_relation":
+          // Relationship creation requested
+          if (result.relationCreate) {
+            console.log(`[Relation] ${result.relationCreate.sourceTable} → ${result.relationCreate.targetTable}`);
+            // This would trigger the relation creation in the data modeling view
+          }
+          break;
+
         case "reject":
           // Request was rejected for ethical or technical reasons
           // The message already contains the explanation - no action needed
@@ -166,6 +190,16 @@ export function PromptBar() {
       }
 
       setAiMessage(result.message || "Changes applied successfully!");
+      
+      // Store suggested follow-up questions if provided
+      if (result.suggestedQuestions && Array.isArray(result.suggestedQuestions)) {
+        setSuggestedQuestions(result.suggestedQuestions);
+      }
+      
+      // Add to chat history for context memory
+      addToChatHistory({ role: "user", content: userPrompt });
+      addToChatHistory({ role: "assistant", content: result.message, action: result.action });
+      
       setPrompt("");
     } catch (error) {
       setAiMessage(
@@ -198,7 +232,10 @@ export function PromptBar() {
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => setAiMessage("")}
+                  onClick={() => {
+                    setAiMessage("");
+                    setSuggestedQuestions([]);
+                  }}
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>
@@ -207,7 +244,33 @@ export function PromptBar() {
           </div>
         )}
 
-        {showExamples && (
+        {/* Suggested Follow-up Questions - Show when available (takes priority over examples) */}
+        {suggestedQuestions.length > 0 && (
+          <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
+              <span className="text-xs text-muted-foreground font-mono">Try next:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {suggestedQuestions.map((question, index) => (
+                <button
+                  key={index}
+                  className="text-xs px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors font-mono"
+                  onClick={() => {
+                    setPrompt(question);
+                    setSuggestedQuestions([]);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Example prompts - Only show when focused AND no suggestions available */}
+        {showExamples && suggestedQuestions.length === 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
             {EXAMPLE_PROMPTS.map((example) => (
               <button

@@ -124,6 +124,27 @@
   }
 }
 
+/* Data Modeling SVG Colors */
+:root {
+  --svg-primary: #7c3aed;
+  --svg-muted: #6b7280;
+  --svg-card-bg: #ffffff;
+  --svg-card-border: #e5e7eb;
+  --svg-text: #374151;
+  --canvas-dot-color: #d1d5db;
+  --canvas-bg-color: #f9fafb;
+}
+
+.dark {
+  --svg-primary: #a78bfa;
+  --svg-muted: #9ca3af;
+  --svg-card-bg: #1f2937;
+  --svg-card-border: #374151;
+  --svg-text: #e5e7eb;
+  --canvas-dot-color: #4b5563;
+  --canvas-bg-color: #111827;
+}
+
 /* Hide Next.js development indicator */
 [data-nextjs-dialog-overlay],
 [data-nextjs-dialog],

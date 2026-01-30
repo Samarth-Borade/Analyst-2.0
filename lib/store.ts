@@ -120,6 +120,8 @@ export interface DataSource {
   name: string;
   data: Record<string, unknown>[];
   schema: DataSchema;
+  // User overrides for column types (smart type detection)
+  columnTypeOverrides?: Record<string, ColumnType>;
   // Firebase connection info for live sync
   firebaseConfig?: {
     connectionId: string;
@@ -134,6 +136,10 @@ export interface DataRelation {
   targetId: string;
   sourceColumn: string;
   targetColumn: string;
+  // Relationship cardinality like Power BI
+  cardinality: "one-to-one" | "one-to-many" | "many-to-one" | "many-to-many";
+  // Whether columns were manually matched by user (even if names differ)
+  isManualMatch?: boolean;
 }
 
 export interface Project {
@@ -183,6 +189,12 @@ interface DashboardState {
   
   // Pending prompt from chart picker
   pendingPrompt: string | null;
+  
+  // AI Suggested Follow-up Questions
+  suggestedQuestions: string[];
+  
+  // Conversational Context Memory
+  chatHistory: Array<{ role: "user" | "assistant"; content: string; action?: string }>;
 
   // Project Actions
   createProject: (name: string) => string;
@@ -211,6 +223,10 @@ interface DashboardState {
   // Relation Actions
   addRelation: (relation: Omit<DataRelation, "id">) => void;
   removeRelation: (id: string) => void;
+  updateRelation: (id: string, updates: Partial<DataRelation>) => void;
+  
+  // Column Type Override Actions (Smart Type Detection)
+  updateColumnType: (dataSourceId: string, columnName: string, newType: ColumnType) => void;
 
   // Data Actions
   setRawData: (data: Record<string, unknown>[], fileName: string) => void;
@@ -243,6 +259,13 @@ interface DashboardState {
   // Pending Prompt Actions
   setPendingPrompt: (prompt: string | null) => void;
   
+  // Suggested Questions Actions
+  setSuggestedQuestions: (questions: string[]) => void;
+  
+  // Chat History Actions (Conversational Memory)
+  addToChatHistory: (message: { role: "user" | "assistant"; content: string; action?: string }) => void;
+  clearChatHistory: () => void;
+  
   reset: () => void;
 }
 
@@ -268,6 +291,8 @@ const initialState = {
   previewData: null as Record<string, unknown>[] | null,
   selectedColumns: [] as string[],
   pendingPrompt: null as string | null,
+  suggestedQuestions: [] as string[],
+  chatHistory: [] as Array<{ role: "user" | "assistant"; content: string; action?: string }>,
 };
 
 export const useDashboardStore = create<DashboardState>()(
@@ -843,8 +868,14 @@ export const useDashboardStore = create<DashboardState>()(
 
       addRelation: (relation) => {
         const id = `relation-${Date.now()}`;
+        // Default cardinality if not provided
+        const fullRelation = {
+          ...relation,
+          id,
+          cardinality: relation.cardinality || "one-to-many" as const,
+        };
         set((state) => ({
-          relations: [...state.relations, { ...relation, id }],
+          relations: [...state.relations, fullRelation],
         }));
         get().saveCurrentProject();
       },
@@ -852,6 +883,40 @@ export const useDashboardStore = create<DashboardState>()(
       removeRelation: (id) => {
         set((state) => ({
           relations: state.relations.filter((r) => r.id !== id),
+        }));
+        get().saveCurrentProject();
+      },
+      
+      updateRelation: (id, updates) => {
+        set((state) => ({
+          relations: state.relations.map((r) =>
+            r.id === id ? { ...r, ...updates } : r
+          ),
+        }));
+        get().saveCurrentProject();
+      },
+      
+      updateColumnType: (dataSourceId, columnName, newType) => {
+        set((state) => ({
+          dataSources: state.dataSources.map((ds) =>
+            ds.id === dataSourceId
+              ? {
+                  ...ds,
+                  columnTypeOverrides: {
+                    ...ds.columnTypeOverrides,
+                    [columnName]: newType,
+                  },
+                  schema: {
+                    ...ds.schema,
+                    columns: ds.schema.columns.map((col) =>
+                      col.name === columnName
+                        ? { ...col, type: newType, isMetric: newType === "numeric", isDimension: newType === "categorical" }
+                        : col
+                    ),
+                  },
+                }
+              : ds
+          ),
         }));
         get().saveCurrentProject();
       },
@@ -997,6 +1062,16 @@ export const useDashboardStore = create<DashboardState>()(
       
       // Pending Prompt Actions
       setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
+      
+      // Suggested Questions Actions
+      setSuggestedQuestions: (suggestedQuestions) => set({ suggestedQuestions }),
+      
+      // Chat History Actions (Conversational Memory)
+      addToChatHistory: (message) => 
+        set((state) => ({
+          chatHistory: [...state.chatHistory, message].slice(-20), // Keep last 20 messages
+        })),
+      clearChatHistory: () => set({ chatHistory: [] }),
 
       reset: () =>
         set({
