@@ -1,0 +1,9 @@
+Salesperson ID,Salesperson,Email,Phone,Region,Hire Date,Commission Rate,Monthly Target,Department,Manager
+SP001,John Smith,john.smith@company.com,555-1001,North,2022-03-15,0.08,25000,Sales,David Brown
+SP002,Sarah Lee,sarah.lee@company.com,555-1002,South,2021-07-20,0.10,30000,Sales,David Brown
+SP003,Mike Chen,mike.chen@company.com,555-1003,East,2023-01-10,0.07,20000,Sales,Lisa Wang
+SP004,Emma Wilson,emma.wilson@company.com,555-1004,West,2022-09-05,0.09,28000,Sales,Lisa Wang
+SP005,David Brown,david.brown@company.com,555-1005,North,2019-04-12,0.12,50000,Management,CEO
+SP006,Lisa Wang,lisa.wang@company.com,555-1006,East,2020-11-30,0.11,45000,Management,CEO
+SP007,James Taylor,james.taylor@company.com,555-1007,South,2023-06-18,0.06,18000,Sales,David Brown
+SP008,Amy Garcia,amy.garcia@company.com,555-1008,West,2024-02-01,0.05,15000,Sales,Lisa Wang

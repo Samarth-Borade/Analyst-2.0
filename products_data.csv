@@ -1,0 +1,30 @@
+Product ID,Product,Category,Brand,Unit Cost,Unit Price,Stock Quantity,Reorder Level,Supplier,Weight (kg),Warranty Months
+P001,Laptop Pro,Electronics,TechBrand,1125,1500,45,10,Alpha Supplies,2.1,24
+P002,Laptop Basic,Electronics,TechBrand,741,950,60,15,Alpha Supplies,2.3,12
+P003,Phone X,Electronics,MobileMax,640,800,120,25,Beta Electronics,0.18,12
+P004,Phone Y,Electronics,MobileMax,533,650,95,20,Beta Electronics,0.17,12
+P005,Tablet Pro,Electronics,TechBrand,312,400,55,12,Alpha Supplies,0.5,18
+P006,Tablet Mini,Electronics,TechBrand,259,320,70,15,Alpha Supplies,0.35,12
+P007,Monitor 27,Electronics,ViewPro,246,300,30,8,Gamma Displays,4.5,36
+P008,Monitor 32,Electronics,ViewPro,356,450,25,5,Gamma Displays,6.2,36
+P009,Keyboard Mech,Electronics,TypeMaster,64,85,150,30,Delta Peripherals,0.8,24
+P010,Keyboard Basic,Electronics,TypeMaster,30,35,200,50,Delta Peripherals,0.5,12
+P011,Mouse Wireless,Electronics,ClickPro,37,45,180,40,Delta Peripherals,0.1,12
+P012,Mouse Gaming,Electronics,ClickPro,59,75,100,25,Delta Peripherals,0.15,18
+P013,Printer Laser,Electronics,PrintMax,245,350,20,5,Epsilon Tech,8.5,24
+P014,Printer Inkjet,Electronics,PrintMax,90,120,35,10,Epsilon Tech,5.2,12
+P015,Executive Desk,Furniture,OfficePrime,520,800,15,3,Zeta Furnishings,45,60
+P016,Standing Desk,Furniture,OfficePrime,442,650,20,5,Zeta Furnishings,38,48
+P017,Office Chair,Furniture,ComfortSeat,180,300,50,10,Zeta Furnishings,12,36
+P018,Gaming Chair,Furniture,ComfortSeat,279,450,30,8,Zeta Furnishings,18,36
+P019,Bookcase Oak,Furniture,WoodCraft,112,180,25,5,Eta Woodworks,28,24
+P020,Bookcase Metal,Furniture,MetalWorks,98,150,35,8,Theta Metals,22,36
+P021,Filing Cabinet,Furniture,MetalWorks,147,220,18,4,Theta Metals,25,48
+P022,Pen Set,Stationery,WriteWell,7,8,500,100,Iota Supplies,0.05,0
+P023,Notebook Pack,Stationery,WriteWell,21,25,800,150,Iota Supplies,0.3,0
+P024,Markers,Stationery,ColorMax,10,12,400,80,Iota Supplies,0.08,0
+P025,Sticky Notes,Stationery,WriteWell,5,6,600,120,Iota Supplies,0.02,0
+P026,Headphones Pro,Electronics,SoundMax,126,175,80,20,Kappa Audio,0.25,24
+P027,Headphones Basic,Electronics,SoundMax,44,55,150,35,Kappa Audio,0.18,12
+P028,Smartwatch Elite,Electronics,WearTech,245,350,40,10,Lambda Wearables,0.05,18
+P029,Smartwatch Sport,Electronics,WearTech,150,200,65,15,Lambda Wearables,0.04,12

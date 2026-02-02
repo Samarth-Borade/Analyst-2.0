@@ -1,0 +1,16 @@
+Customer ID,Customer Name,Customer Segment,Email,Phone,City,State,Country,Join Date,Credit Limit,Account Status
+C001,Acme Corp,Enterprise,contact@acmecorp.com,555-0101,New York,NY,USA,2024-01-15,50000,Active
+C002,TechStart Inc,Small Business,info@techstart.io,555-0102,San Francisco,CA,USA,2024-02-20,15000,Active
+C003,Jane Doe,Consumer,jane.doe@email.com,555-0103,Chicago,IL,USA,2024-03-10,5000,Active
+C004,Global Systems,Enterprise,sales@globalsys.com,555-0104,Dallas,TX,USA,2024-01-08,75000,Active
+C005,Mike's Shop,Small Business,mike@mikeshop.com,555-0105,Seattle,WA,USA,2024-04-15,10000,Active
+C006,Sarah Johnson,Consumer,sarah.j@email.com,555-0106,Boston,MA,USA,2024-05-22,3000,Active
+C007,Innovate LLC,Enterprise,hello@innovate.co,555-0107,Austin,TX,USA,2024-02-14,60000,Active
+C008,Quick Retail,Small Business,orders@quickretail.com,555-0108,Denver,CO,USA,2024-06-01,12000,Active
+C009,Tom Wilson,Consumer,tom.wilson@email.com,555-0109,Miami,FL,USA,2024-03-30,4000,Inactive
+C010,DataFlow Corp,Enterprise,procurement@dataflow.com,555-0110,Portland,OR,USA,2024-07-12,80000,Active
+C011,Local Goods,Small Business,info@localgoods.net,555-0111,Phoenix,AZ,USA,2024-08-05,8000,Active
+C012,Emily Brown,Consumer,emily.b@email.com,555-0112,Atlanta,GA,USA,2024-04-18,2500,Active
+C013,Prime Solutions,Enterprise,contact@primesol.com,555-0113,Houston,TX,USA,2024-01-25,55000,Active
+C014,Corner Store,Small Business,hello@cornerstore.com,555-0114,Las Vegas,NV,USA,2024-09-10,9000,Active
+C015,Alex Chen,Consumer,alex.chen@email.com,555-0115,San Diego,CA,USA,2024-05-08,3500,Active

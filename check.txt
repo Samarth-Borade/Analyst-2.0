@@ -1,0 +1,23 @@
+Share Dashboards with Permissions (share-dialog.tsx)
+
+Share via email with granular permissions: View Only, Editor, Admin
+Public link toggle for anyone-can-view access
+Copy shareable link to clipboard
+View and manage all shared users
+Update/remove permissions for existing collaborators
+Expiring access support
+Real-time Collaboration (collaboration.tsx)
+
+Live connection status indicator (green "Live" badge when connected)
+Collaborator presence avatars showing who's editing
+Cursor tracking support (infrastructure ready for WebSocket)
+Selection highlighting to show what others are editing
+CollaborationProvider context for app-wide state
+Audit Logs (audit-log.tsx)
+
+Track all dashboard activities: create, update, delete, share, view, export
+Filter by action type
+Grouped by time (Today, Yesterday, This Week, etc.)
+Expandable details for each log entry
+Shows who did what and when
+useAuditLog hook for logging events throughout the app

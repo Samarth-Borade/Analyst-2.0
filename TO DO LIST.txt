@@ -1,0 +1,36 @@
+Core Prompt Intelligence
+Conversational Context Memory - Keep chat history so users can ask follow-up questions like "show me the same data but by region" without re-explaining
+Multi-step Query Chains - Support "First show me top 5 products, then break down their sales by month" in one prompt
+Suggested Next Questions - AI-generated follow-up suggestions based on current data view
+Natural Language Explanations - Auto-generate insights/summaries of what the data shows
+Advanced Data Capabilities
+Data Transformation in UI - Let users clean, pivot, aggregate data through prompts ("remove nulls", "combine these columns")
+Smart Data Type Detection - Auto-detect and suggest column types, allow overrides
+Multi-source Joins - "Join sales data with customer data on ID" - support complex queries across tables
+
+
+Real-time Data Connectors - Go beyond CSV: SQL databases, APIs, Google Sheets, Salesforce, etc.
+
+
+Visualization Enhancements
+Drill-Down Navigation - Click a bar to see the underlying details (click 2024 → see monthly breakdown)
+Cross-Chart Filtering - Select a customer in one chart and auto-filter all others
+Custom Styling per Dashboard - Color schemes, fonts, layouts via simple prompts
+Dashboard Templates - Pre-built layouts users can clone and customize
+
+Collaboration & Sharing
+Share Dashboards - With granular permissions (view-only, edit, admin)
+Real-time Collaboration - Multiple users editing same dashboard simultaneously
+Audit Logs - Track who changed what and when
+
+
+Smart Analytics
+AI-Powered Insights - Auto-detect anomalies, trends, correlations
+Forecasting - "Predict next quarter sales" based on historical data
+What-if Scenarios - "Show me sales if we increase price by 10%"
+Performance & Polish
+Smart Caching - Cache common queries to speed up dashboard loads
+Pagination for Large Datasets - Handle millions of rows efficiently
+Mobile-First Design - Full functionality on tablets/phones
+Dark Mode & Accessibility - WCAG compliance
+The biggest differentiator vs Power BI/Tableau would be making the prompt interface truly conversational—where users naturally explore data through dialogue rather than clicking through menus.
