@@ -13,6 +13,7 @@ import {
   X,
   GripVertical,
   Table2,
+  Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,8 +79,11 @@ export function RelationsView() {
     sourceColumn: null,
   });
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null);
+  const [scrollTrigger, setScrollTrigger] = useState(0); // Force re-render on scroll
   const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const tableRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const columnRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Initialize table positions when data sources change
   useEffect(() => {
@@ -220,25 +224,73 @@ export function RelationsView() {
     );
   };
 
+  // Get connected columns for highlighting
+  const getConnectedColumns = useCallback(() => {
+    const connected = new Map<string, Set<string>>();
+    relations.forEach((rel) => {
+      const sourceKey = `${rel.sourceId}-${rel.sourceColumn}`;
+      const targetKey = `${rel.targetId}-${rel.targetColumn}`;
+      
+      if (!connected.has(rel.sourceId)) connected.set(rel.sourceId, new Set());
+      if (!connected.has(rel.targetId)) connected.set(rel.targetId, new Set());
+      
+      connected.get(rel.sourceId)!.add(rel.sourceColumn);
+      connected.get(rel.targetId)!.add(rel.targetColumn);
+    });
+    return connected;
+  }, [relations]);
+
+  const connectedColumns = getConnectedColumns();
+
   const getColumnCenter = (
     tableId: string,
     columnName: string,
     isSource: boolean
-  ): { x: number; y: number } => {
-    const pos = getTablePosition(tableId);
-    const ds = dataSources.find((d) => d.id === tableId);
-    if (!ds) return { x: pos.x, y: pos.y };
+  ): { x: number; y: number; visible: boolean } => {
+    const columnKey = `${tableId}-${columnName}`;
+    const columnEl = columnRefs.current.get(columnKey);
+    const tableEl = tableRefs.current.get(tableId);
+    
+    if (!columnEl || !tableEl || !canvasRef.current) {
+      // Fallback to calculated position
+      const pos = getTablePosition(tableId);
+      const ds = dataSources.find((d) => d.id === tableId);
+      if (!ds) return { x: pos.x, y: pos.y, visible: false };
 
-    const columnIndex = ds.schema.columns.findIndex(
-      (c) => c.name === columnName
-    );
-    const cardWidth = 280;
-    const headerHeight = 48;
-    const columnHeight = 32;
+      const columnIndex = ds.schema.columns.findIndex(
+        (c) => c.name === columnName
+      );
+      const cardWidth = 280;
+      const headerHeight = 48;
+      const columnHeight = 32;
 
+      return {
+        x: pos.x + (isSource ? cardWidth : 0),
+        y: pos.y + headerHeight + columnIndex * columnHeight + columnHeight / 2,
+        visible: true,
+      };
+    }
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const tableRect = tableEl.getBoundingClientRect();
+    const columnRect = columnEl.getBoundingClientRect();
+    
+    // Check if column is visible within the table card
+    const tableContentTop = tableRect.top + 48; // header height
+    const tableContentBottom = tableRect.bottom;
+    const columnTop = columnRect.top;
+    const columnBottom = columnRect.bottom;
+    
+    const isVisible = columnTop >= tableContentTop - 5 && columnBottom <= tableContentBottom + 5;
+    
+    // Calculate position relative to canvas
+    const scrollLeft = canvasRef.current.scrollLeft;
+    const scrollTop = canvasRef.current.scrollTop;
+    
     return {
-      x: pos.x + (isSource ? cardWidth : 0),
-      y: pos.y + headerHeight + columnIndex * columnHeight + columnHeight / 2,
+      x: columnRect.left - canvasRect.left + scrollLeft + (isSource ? columnRect.width : 0),
+      y: columnRect.top - canvasRect.top + scrollTop + columnRect.height / 2,
+      visible: isVisible,
     };
   };
 
@@ -257,9 +309,18 @@ export function RelationsView() {
 
       // Create a curved path
       const midX = (start.x + end.x) / 2;
-      const controlOffset = Math.abs(end.x - start.x) * 0.5;
+      const controlOffset = Math.abs(end.x - start.x) * 0.4;
 
       const path = `M ${start.x} ${start.y} C ${start.x + controlOffset} ${start.y}, ${end.x - controlOffset} ${end.y}, ${end.x} ${end.y}`;
+
+      const isSelected = selectedRelation === relation.id;
+      const bothVisible = start.visible && end.visible;
+      
+      // Get cardinality label
+      const cardinalityLabel = relation.cardinality === "one-to-one" ? "1:1" 
+        : relation.cardinality === "one-to-many" ? "1:N"
+        : relation.cardinality === "many-to-one" ? "N:1"
+        : "N:N";
 
       return (
         <g
@@ -270,27 +331,54 @@ export function RelationsView() {
               selectedRelation === relation.id ? null : relation.id
             )
           }
+          style={{ opacity: bothVisible ? 1 : 0.3 }}
         >
+          {/* Main path */}
           <path
             d={path}
             fill="none"
-            stroke={
-              selectedRelation === relation.id
-                ? "hsl(var(--primary))"
-                : "hsl(var(--muted-foreground))"
-            }
-            strokeWidth={selectedRelation === relation.id ? 3 : 2}
-            strokeDasharray={selectedRelation === relation.id ? "none" : "5,5"}
+            stroke={isSelected ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
+            strokeWidth={isSelected ? 3 : 2}
             className="transition-all"
           />
-          {/* Connection dots */}
+          
+          {/* Connection dots at source */}
           <circle
             cx={start.x}
             cy={start.y}
-            r={4}
-            fill="hsl(var(--primary))"
+            r={5}
+            fill={isSelected ? "hsl(var(--primary))" : "hsl(var(--primary))"}
+            stroke="hsl(var(--background))"
+            strokeWidth={2}
           />
-          <circle cx={end.x} cy={end.y} r={4} fill="hsl(var(--primary))" />
+          
+          {/* Arrow at target */}
+          <polygon
+            points={`${end.x},${end.y} ${end.x - 10},${end.y - 5} ${end.x - 10},${end.y + 5}`}
+            fill={isSelected ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
+          />
+          
+          {/* Cardinality label in the middle */}
+          <rect
+            x={midX - 18}
+            y={(start.y + end.y) / 2 - 10}
+            width={36}
+            height={20}
+            rx={4}
+            fill="hsl(var(--background))"
+            stroke={isSelected ? "hsl(var(--primary))" : "hsl(var(--border))"}
+            strokeWidth={1}
+          />
+          <text
+            x={midX}
+            y={(start.y + end.y) / 2 + 4}
+            textAnchor="middle"
+            fontSize={11}
+            fontFamily="monospace"
+            fill={isSelected ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
+          >
+            {cardinalityLabel}
+          </text>
         </g>
       );
     });
@@ -478,12 +566,17 @@ export function RelationsView() {
           {/* Table Cards */}
           {dataSources.map((ds) => {
             const pos = getTablePosition(ds.id);
+            const tableConnectedCols = connectedColumns.get(ds.id) || new Set();
             return (
               <Card
                 key={ds.id}
+                ref={(el) => {
+                  if (el) tableRefs.current.set(ds.id, el);
+                }}
                 className={cn(
-                  "table-card absolute w-[280px] shadow-lg",
-                  dragState.tableId === ds.id && "opacity-80"
+                  "table-card absolute w-[280px] shadow-lg border-2",
+                  dragState.tableId === ds.id && "opacity-80",
+                  dragState.tableId === ds.id ? "border-primary" : "border-border"
                 )}
                 style={{
                   left: pos.x,
@@ -500,36 +593,67 @@ export function RelationsView() {
                   <CardTitle className="text-sm flex-1 truncate">
                     {ds.name}
                   </CardTitle>
+                  <Badge variant="secondary" className="text-xs">
+                    {ds.schema.rowCount} rows
+                  </Badge>
                 </CardHeader>
-                <CardContent className="p-0">
-                  {ds.schema.columns.map((col) => (
-                    <div
-                      key={col.name}
-                      className={cn(
-                        "flex items-center justify-between px-3 py-2 border-b last:border-b-0 hover:bg-accent/50 cursor-pointer transition-colors",
-                        connectionState.isConnecting &&
-                          connectionState.sourceId === ds.id &&
-                          connectionState.sourceColumn === col.name &&
-                          "bg-primary/10"
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (connectionState.isConnecting) {
-                          endConnection(ds.id, col.name);
-                        } else {
-                          startConnection(ds.id, col.name);
-                        }
-                      }}
-                    >
-                      <span className="text-sm truncate">{col.name}</span>
-                      <Badge
-                        variant="outline"
-                        className="text-xs font-mono shrink-0"
+                <CardContent className="p-0 max-h-[400px] overflow-y-auto" onScroll={() => setScrollTrigger(prev => prev + 1)}>
+                  {ds.schema.columns.map((col) => {
+                    const isConnected = tableConnectedCols.has(col.name);
+                    const isActiveConnection = connectionState.isConnecting &&
+                      connectionState.sourceId === ds.id &&
+                      connectionState.sourceColumn === col.name;
+                    
+                    return (
+                      <div
+                        key={col.name}
+                        ref={(el) => {
+                          if (el) columnRefs.current.set(`${ds.id}-${col.name}`, el);
+                        }}
+                        className={cn(
+                          "flex items-center justify-between px-3 py-2 border-b last:border-b-0 cursor-pointer transition-all",
+                          isActiveConnection && "bg-primary/20 ring-2 ring-primary ring-inset",
+                          isConnected && !isActiveConnection && "bg-primary/10 border-l-4 border-l-primary",
+                          !isConnected && !isActiveConnection && "hover:bg-accent/50"
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (connectionState.isConnecting) {
+                            endConnection(ds.id, col.name);
+                          } else {
+                            startConnection(ds.id, col.name);
+                          }
+                        }}
                       >
-                        {col.type}
-                      </Badge>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          {/* Column type icon */}
+                          {col.type === "numeric" ? (
+                            <span className="text-blue-500 font-mono text-xs">#</span>
+                          ) : col.type === "datetime" ? (
+                            <span className="text-green-500 text-xs">📅</span>
+                          ) : (
+                            <span className="text-muted-foreground font-mono text-xs">T</span>
+                          )}
+                          <span className={cn(
+                            "text-sm truncate",
+                            isConnected && "font-medium"
+                          )}>
+                            {col.name}
+                          </span>
+                          {/* Key icon for connected columns */}
+                          {isConnected && (
+                            <Key className="h-3 w-3 text-primary" />
+                          )}
+                        </div>
+                        <Badge
+                          variant={isConnected ? "default" : col.isMetric ? "secondary" : "outline"}
+                          className="text-xs font-mono shrink-0"
+                        >
+                          {col.isMetric ? "M" : "D"}
+                        </Badge>
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
             );

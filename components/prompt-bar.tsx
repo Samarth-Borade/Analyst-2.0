@@ -42,6 +42,7 @@ export function PromptBar() {
     setSuggestedQuestions,
     chatHistory,
     addToChatHistory,
+    createCalculatedColumn,
   } = useDashboardStore();
 
   // Get visualization context for style updates
@@ -193,10 +194,22 @@ export function PromptBar() {
           break;
 
         case "transform_data":
-          // Data transformation requested - show message with instructions
-          console.log(`[Transform] Operation: ${result.dataTransform?.operation}`);
-          // The actual transformation would be handled by a separate data processing function
-          // For now, we inform the user about the requested transformation
+          // Data transformation requested
+          if (result.dataTransform) {
+            const { operation, targetDataSource, newName, formula, column } = result.dataTransform;
+            console.log(`[Transform] Operation: ${operation}`);
+            
+            if (operation === "create_calculated" && newName && formula) {
+              // Create a calculated column in the data source
+              const success = createCalculatedColumn(targetDataSource, newName, formula);
+              if (success) {
+                console.log(`[Transform] Created calculated column: ${newName} = ${formula}`);
+              } else {
+                console.error(`[Transform] Failed to create calculated column: ${newName}`);
+              }
+            }
+            // Other operations can be handled here in the future
+          }
           break;
 
         case "create_relation":

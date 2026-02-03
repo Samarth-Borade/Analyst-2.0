@@ -78,6 +78,8 @@ export function RadarChartComponent({ config, data }: RadarChartProps) {
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
             />
           </RechartsRadarChart>
         </ResponsiveContainer>

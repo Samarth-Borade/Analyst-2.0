@@ -57,13 +57,17 @@ export function WaterfallChartComponent({ config, data }: WaterfallChartProps) {
   });
 
   const titlePosition = config.titlePosition || "top";
+  
+  // Generate axis titles from column names if not provided
+  const xAxisTitle = config.xAxisTitle || config.xAxis;
+  const yAxisTitle = config.yAxisTitle || yMetric;
 
   return (
     <Card className="h-full bg-card border-border">
       <ChartTitleHeader title={config.title} position={titlePosition} />
       <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={waterfallData} margin={{ left: 0, right: 0 }}>
+          <BarChart data={waterfallData} margin={{ left: 10, right: 10, top: 10, bottom: 25 }}>
             <CartesianGrid
               strokeDasharray="3 3"
               vertical={false}
@@ -76,6 +80,7 @@ export function WaterfallChartComponent({ config, data }: WaterfallChartProps) {
               tickLine={false}
               axisLine={false}
               className="text-muted-foreground fill-muted-foreground"
+              label={{ value: xAxisTitle, position: 'bottom', offset: 10, fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
             />
             <YAxis
               tick={{ fontSize: 11 }}
@@ -85,6 +90,7 @@ export function WaterfallChartComponent({ config, data }: WaterfallChartProps) {
                 value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
               }
               className="text-muted-foreground fill-muted-foreground"
+              label={{ value: yAxisTitle, angle: -90, position: 'insideLeft', offset: 5, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             />
             <Tooltip
               contentStyle={{
@@ -94,6 +100,8 @@ export function WaterfallChartComponent({ config, data }: WaterfallChartProps) {
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
               formatter={(value: number) => [value.toLocaleString(), yMetric]}
             />
             <ReferenceLine y={0} stroke="currentColor" className="text-border" />

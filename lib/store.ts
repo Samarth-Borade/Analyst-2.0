@@ -81,6 +81,9 @@ export interface ChartConfig {
   title: string;
   xAxis?: string;
   yAxis?: string | string[];
+  // Axis titles for charts with X and Y axes
+  xAxisTitle?: string;
+  yAxisTitle?: string;
   groupBy?: string;
   aggregation?: "sum" | "avg" | "count" | "min" | "max";
   filters?: Record<string, string[]>;
@@ -96,6 +99,11 @@ export interface ChartConfig {
   columns?: string[];
   // Title position: top or bottom (default: top)
   titlePosition?: "top" | "bottom";
+  // Formula for calculated metrics (e.g., "Cost / Sales" for cost per sale)
+  // Supports: column names, +, -, *, /, parentheses, and numbers
+  formula?: string;
+  // Human-readable name for the formula result (e.g., "Cost Per Sale")
+  formulaLabel?: string;
   width: number;
   height: number;
   x: number;
@@ -175,6 +183,14 @@ interface DashboardState {
   currentPageId: string | null;
   filters: FilterState[];
 
+  // What-If Scenario Mode
+  whatIfMode: boolean;
+  whatIfScenario: {
+    field: string;
+    changePercent: number;
+    originalData: Record<string, unknown>[] | null;
+  } | null;
+
   // UI
   theme: "light" | "dark";
   isLoading: boolean;
@@ -228,6 +244,9 @@ interface DashboardState {
   // Column Type Override Actions (Smart Type Detection)
   updateColumnType: (dataSourceId: string, columnName: string, newType: ColumnType) => void;
 
+  // Data Transformation Actions
+  createCalculatedColumn: (dataSourceId: string | undefined, columnName: string, formula: string) => boolean;
+
   // Data Actions
   setRawData: (data: Record<string, unknown>[], fileName: string) => void;
   setSchema: (schema: DataSchema) => void;
@@ -266,6 +285,10 @@ interface DashboardState {
   addToChatHistory: (message: { role: "user" | "assistant"; content: string; action?: string }) => void;
   clearChatHistory: () => void;
   
+  // What-If Scenario Actions
+  applyWhatIfScenario: (field: string, changePercent: number) => void;
+  exitWhatIfMode: () => void;
+  
   reset: () => void;
 }
 
@@ -282,6 +305,8 @@ const initialState = {
   pages: [] as DashboardPage[],
   currentPageId: null as string | null,
   filters: [] as FilterState[],
+  whatIfMode: false,
+  whatIfScenario: null as { field: string; changePercent: number; originalData: Record<string, unknown>[] | null } | null,
   theme: "dark" as const,
   isLoading: false,
   aiMessage: null as string | null,
@@ -963,6 +988,97 @@ export const useDashboardStore = create<DashboardState>()(
         get().saveCurrentProject();
       },
 
+      createCalculatedColumn: (dataSourceId, columnName, formula) => {
+        const state = get();
+        
+        // Find the target data source (or use first one if not specified)
+        let targetSource: DataSource | undefined;
+        if (dataSourceId) {
+          targetSource = state.dataSources.find((ds) => ds.id === dataSourceId || ds.name === dataSourceId);
+        } else {
+          targetSource = state.dataSources[0];
+        }
+        
+        if (!targetSource || !targetSource.data || targetSource.data.length === 0) {
+          console.error("No data source found for calculated column");
+          return false;
+        }
+        
+        try {
+          // Get available column names
+          const availableColumns = Object.keys(targetSource.data[0]);
+          
+          // Sort columns by length (longest first) to avoid partial matches
+          const sortedColumns = [...availableColumns].sort((a, b) => b.length - a.length);
+          
+          // Helper to escape regex special characters
+          const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          
+          // Calculate the new column for each row
+          const newData = targetSource.data.map((row) => {
+            let expression = formula;
+            
+            // Replace column names with their values
+            for (const col of sortedColumns) {
+              const regex = new RegExp(`\\b${escapeRegex(col)}\\b`, 'g');
+              const value = Number(row[col]) || 0;
+              expression = expression.replace(regex, String(value));
+            }
+            
+            // Safely evaluate the expression
+            let result = 0;
+            try {
+              const sanitized = expression.replace(/[^0-9+\-*/().%\s]/g, '');
+              if (sanitized === expression.trim()) {
+                result = new Function(`"use strict"; return (${sanitized})`)();
+                result = isFinite(result) ? result : 0;
+              }
+            } catch (e) {
+              console.warn("Failed to evaluate formula for row:", formula, e);
+            }
+            
+            return {
+              ...row,
+              [columnName]: Math.round(result * 100) / 100, // Round to 2 decimal places
+            };
+          });
+          
+          // Create new schema column
+          const newColumn: Column = {
+            name: columnName,
+            type: "numeric",
+            sample: newData.slice(0, 5).map((r) => String(r[columnName])),
+            uniqueCount: new Set(newData.map((r) => r[columnName])).size,
+            nullCount: 0,
+            isMetric: true,
+            isDimension: false,
+          };
+          
+          const newSchema: DataSchema = {
+            ...targetSource.schema,
+            columns: [...targetSource.schema.columns, newColumn],
+          };
+          
+          // Update the data source
+          set((s) => ({
+            dataSources: s.dataSources.map((ds) =>
+              ds.id === targetSource!.id
+                ? { ...ds, data: newData, schema: newSchema }
+                : ds
+            ),
+            rawData: s.dataSources[0]?.id === targetSource!.id ? newData : s.rawData,
+            schema: s.dataSources[0]?.id === targetSource!.id ? newSchema : s.schema,
+          }));
+          
+          console.log(`✅ Created calculated column "${columnName}" = ${formula}`);
+          get().saveCurrentProject();
+          return true;
+        } catch (error) {
+          console.error("Failed to create calculated column:", error);
+          return false;
+        }
+      },
+
       setRawData: (data, fileName) => {
         set({ rawData: data, fileName });
         // Also add as data source if we have a current project
@@ -1114,6 +1230,62 @@ export const useDashboardStore = create<DashboardState>()(
           chatHistory: [...state.chatHistory, message].slice(-20), // Keep last 20 messages
         })),
       clearChatHistory: () => set({ chatHistory: [] }),
+
+      // What-If Scenario Actions
+      applyWhatIfScenario: (field, changePercent) => {
+        const state = get();
+        const originalData = state.rawData;
+        
+        if (!originalData) return;
+        
+        // Apply the percentage change to the field
+        const modifiedData = originalData.map(row => {
+          const originalValue = Number(row[field]) || 0;
+          const newValue = originalValue * (1 + changePercent / 100);
+          return {
+            ...row,
+            [field]: newValue,
+          };
+        });
+        
+        set({
+          whatIfMode: true,
+          whatIfScenario: {
+            field,
+            changePercent,
+            originalData,
+          },
+          rawData: modifiedData,
+          // Also update first data source if exists
+          dataSources: state.dataSources.map((ds, index) => 
+            index === 0 
+              ? { ...ds, data: modifiedData }
+              : ds
+          ),
+        });
+      },
+      
+      exitWhatIfMode: () => {
+        const state = get();
+        const originalData = state.whatIfScenario?.originalData;
+        
+        if (!originalData) {
+          set({ whatIfMode: false, whatIfScenario: null });
+          return;
+        }
+        
+        set({
+          whatIfMode: false,
+          whatIfScenario: null,
+          rawData: originalData,
+          // Restore first data source
+          dataSources: state.dataSources.map((ds, index) => 
+            index === 0 
+              ? { ...ds, data: originalData }
+              : ds
+          ),
+        });
+      },
 
       reset: () =>
         set({

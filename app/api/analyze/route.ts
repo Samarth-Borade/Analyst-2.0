@@ -187,7 +187,7 @@ Return a valid dashboard configuration JSON with clear page names and a summary 
     const inputTokens = estimateTokens(prompt);
 
     const { text } = await generateText({
-      model: groq("llama-3.3-70b-versatile"),
+      model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
       prompt,
     });
 
@@ -199,7 +199,7 @@ Return a valid dashboard configuration JSON with clear page names and a summary 
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
-      model: 'llama-3.3-70b-versatile',
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       latencyMs: Date.now() - startTime,
     });
 

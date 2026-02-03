@@ -17,6 +17,12 @@ import {
   Trash2,
   Info,
   Zap,
+  Merge,
+  Table2,
+  PanelRightOpen,
+  PanelRightClose,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,9 +45,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { useDashboardStore, DataRelation, ColumnType } from "@/lib/store";
+import { useDashboardStore, DataRelation, ColumnType, DataSource, DataSchema, Column } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { analyzeData } from "@/lib/data-utils";
+import { CorrelationMatrix, CombinedCorrelationMatrix } from "@/components/correlation-matrix";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TablePosition {
   id: string;
@@ -86,6 +96,7 @@ export function DataModelingView() {
     removeRelation, 
     updateRelation,
     updateColumnType,
+    addDataSource,
     setCurrentView 
   } = useDashboardStore();
   
@@ -98,6 +109,9 @@ export function DataModelingView() {
     offsetX: 0,
     offsetY: 0,
   });
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeRelation, setMergeRelation] = useState<DataRelation | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>({
     isConnecting: false,
     sourceId: null,
@@ -109,10 +123,54 @@ export function DataModelingView() {
   const [showColumnTypeDialog, setShowColumnTypeDialog] = useState(false);
   const [editingColumn, setEditingColumn] = useState<{ dsId: string; colName: string; currentType: ColumnType } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showHelp, setShowHelp] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showCorrelationPanel, setShowCorrelationPanel] = useState(true);
+  const [selectedDataSourceForCorr, setSelectedDataSourceForCorr] = useState<string | null>(null);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const columnRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [scrollTrigger, setScrollTrigger] = useState(0);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prevDataSourceCountRef = useRef(dataSources.length);
+
+  // Handle scroll to trigger re-render of lines
+  const handleTableScroll = useCallback(() => {
+    // Debounce scroll updates for performance
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      setScrollTrigger(prev => prev + 1);
+    }, 16); // ~60fps
+  }, []);
+
+  // Get connected columns for highlighting
+  const getConnectedColumns = useCallback(() => {
+    const connected = new Map<string, Map<string, string[]>>(); // tableId -> columnName -> [relatedTableId.columnName]
+    relations.forEach((rel) => {
+      // Source column connections
+      if (!connected.has(rel.sourceId)) connected.set(rel.sourceId, new Map());
+      const sourceMap = connected.get(rel.sourceId)!;
+      if (!sourceMap.has(rel.sourceColumn)) sourceMap.set(rel.sourceColumn, []);
+      sourceMap.get(rel.sourceColumn)!.push(`${rel.targetId}.${rel.targetColumn}`);
+      
+      // Target column connections
+      if (!connected.has(rel.targetId)) connected.set(rel.targetId, new Map());
+      const targetMap = connected.get(rel.targetId)!;
+      if (!targetMap.has(rel.targetColumn)) targetMap.set(rel.targetColumn, []);
+      targetMap.get(rel.targetColumn)!.push(`${rel.sourceId}.${rel.sourceColumn}`);
+    });
+    return connected;
+  }, [relations]);
+
+  const connectedColumns = getConnectedColumns();
+
+  // Check if a column is connected
+  const isColumnConnected = useCallback((tableId: string, columnName: string) => {
+    const tableConnections = connectedColumns.get(tableId);
+    return tableConnections?.has(columnName) || false;
+  }, [connectedColumns]);
 
   // Initialize table positions
   useEffect(() => {
@@ -209,6 +267,91 @@ export function DataModelingView() {
     
     setTimeout(() => setIsAnalyzing(false), 500);
   }, [dataSources, relations, addRelation]);
+
+  // Auto-detect relationships when new data source is added
+  useEffect(() => {
+    const prevCount = prevDataSourceCountRef.current;
+    const currentCount = dataSources.length;
+    
+    // Only auto-detect when a new data source was added (count increased) and we have 2+ sources
+    if (currentCount > prevCount && currentCount >= 2) {
+      // Delay slightly to ensure state is updated
+      const timer = setTimeout(() => {
+        analyzeRelationships();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    
+    prevDataSourceCountRef.current = currentCount;
+  }, [dataSources.length, analyzeRelationships]);
+
+  // Create merged/master table from a relationship
+  const createMergedTable = useCallback((relation: DataRelation) => {
+    setIsMerging(true);
+    
+    const sourceTable = dataSources.find(ds => ds.id === relation.sourceId);
+    const targetTable = dataSources.find(ds => ds.id === relation.targetId);
+    
+    if (!sourceTable || !targetTable) {
+      setIsMerging(false);
+      return;
+    }
+    
+    // Create merged data based on the relationship
+    const mergedData: Record<string, unknown>[] = [];
+    
+    // Create a lookup map for the target table
+    const targetLookup = new Map<string, Record<string, unknown>[]>();
+    targetTable.data.forEach(row => {
+      const key = String(row[relation.targetColumn] ?? '');
+      if (!targetLookup.has(key)) {
+        targetLookup.set(key, []);
+      }
+      targetLookup.get(key)!.push(row);
+    });
+    
+    // Merge based on cardinality
+    sourceTable.data.forEach(sourceRow => {
+      const joinKey = String(sourceRow[relation.sourceColumn] ?? '');
+      const matchingTargetRows = targetLookup.get(joinKey) || [];
+      
+      if (matchingTargetRows.length > 0) {
+        matchingTargetRows.forEach(targetRow => {
+          // Combine columns from both tables, prefixing target columns to avoid conflicts
+          const mergedRow: Record<string, unknown> = { ...sourceRow };
+          
+          Object.entries(targetRow).forEach(([key, value]) => {
+            // Skip the join column from target to avoid duplication
+            if (key === relation.targetColumn) return;
+            
+            // If column name exists in source, prefix with target table name
+            const finalKey = key in sourceRow ? `${targetTable.name.replace('.csv', '')}_${key}` : key;
+            mergedRow[finalKey] = value;
+          });
+          
+          mergedData.push(mergedRow);
+        });
+      } else {
+        // Left join - include source row even without match
+        mergedData.push({ ...sourceRow });
+      }
+    });
+    
+    // Generate new schema
+    const schema = analyzeData(mergedData);
+    
+    // Create meaningful name
+    const sourceName = sourceTable.name.replace('.csv', '').replace('_data', '');
+    const targetName = targetTable.name.replace('.csv', '').replace('_data', '');
+    const mergedName = `${sourceName}_${targetName}_merged.csv`;
+    
+    // Add as new data source
+    addDataSource(mergedName, mergedData, schema);
+    
+    setIsMerging(false);
+    setShowMergeDialog(false);
+    setMergeRelation(null);
+  }, [dataSources, addDataSource]);
 
   // Drag handlers
   const handleMouseDown = useCallback((e: React.MouseEvent, tableId: string) => {
@@ -318,24 +461,70 @@ export function DataModelingView() {
     return tablePositions.find((p) => p.id === tableId) || { id: tableId, x: 0, y: 0 };
   };
 
-  const getColumnCenter = (tableId: string, columnName: string, isSource: boolean): { x: number; y: number } => {
+  const getColumnCenter = (tableId: string, columnName: string, isSource: boolean): { x: number; y: number; visible: boolean } => {
+    const columnKey = `${tableId}-${columnName}`;
+    const columnEl = columnRefs.current.get(columnKey);
     const pos = getTablePosition(tableId);
     const ds = dataSources.find((d) => d.id === tableId);
-    if (!ds) return { x: pos.x, y: pos.y };
+    
+    if (!columnEl || !canvasRef.current || !ds) {
+      // Fallback to calculated position
+      if (!ds) return { x: pos.x, y: pos.y, visible: false };
 
-    const columnIndex = ds.schema.columns.findIndex((c) => c.name === columnName);
-    const cardWidth = 300;
-    const headerHeight = 44;
-    const columnHeight = 36;
+      const columnIndex = ds.schema.columns.findIndex((c) => c.name === columnName);
+      const cardWidth = 300;
+      const headerHeight = 44;
+      const columnHeight = 36;
 
+      return {
+        x: pos.x + (isSource ? cardWidth : 0),
+        y: pos.y + headerHeight + columnIndex * columnHeight + columnHeight / 2,
+        visible: true,
+      };
+    }
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const columnRect = columnEl.getBoundingClientRect();
+    const scrollLeft = canvasRef.current.scrollLeft;
+    const scrollTop = canvasRef.current.scrollTop;
+    
+    // Find the scrollable parent container
+    const parentScrollArea = columnEl.closest('.max-h-\\[280px\\]');
+    let isVisible = true;
+    let adjustedY = columnRect.top - canvasRect.top + scrollTop + columnRect.height / 2;
+    
+    if (parentScrollArea) {
+      const parentRect = parentScrollArea.getBoundingClientRect();
+      const headerHeight = 44; // Table header height
+      
+      // Check if column is visible within the scroll area
+      isVisible = columnRect.top >= parentRect.top - 2 && columnRect.bottom <= parentRect.bottom + 2;
+      
+      // If not visible, clamp the Y position to the visible area edge
+      if (!isVisible) {
+        if (columnRect.top < parentRect.top) {
+          // Column is above the visible area - connect to top of visible area
+          adjustedY = parentRect.top - canvasRect.top + scrollTop + 10;
+        } else {
+          // Column is below the visible area - connect to bottom of visible area
+          adjustedY = parentRect.bottom - canvasRect.top + scrollTop - 10;
+        }
+      }
+    }
+    
     return {
-      x: pos.x + (isSource ? cardWidth : 0),
-      y: pos.y + headerHeight + columnIndex * columnHeight + columnHeight / 2,
+      x: columnRect.left - canvasRect.left + scrollLeft + (isSource ? columnRect.width : 0),
+      y: adjustedY,
+      visible: isVisible,
     };
   };
 
-  // Render relationship lines with cardinality symbols (Power BI style)
-  const renderRelationLines = () => {
+  // Render relationship lines with cardinality symbols
+  // Note: scrollTrigger dependency ensures lines update when columns are scrolled
+  const renderRelationLines = useCallback(() => {
+    // Using scrollTrigger to force recalculation when columns are scrolled
+    void scrollTrigger;
+    
     return relations.map((relation) => {
       const start = getColumnCenter(relation.sourceId, relation.sourceColumn, true);
       const end = getColumnCenter(relation.targetId, relation.targetColumn, false);
@@ -346,6 +535,7 @@ export function DataModelingView() {
       const path = `M ${start.x} ${start.y} C ${start.x + controlOffset} ${start.y}, ${end.x - controlOffset} ${end.y}, ${end.x} ${end.y}`;
       
       const isSelected = selectedRelation === relation.id;
+      const bothVisible = start.visible && end.visible;
       const cardinalityLabel = CARDINALITY_OPTIONS.find(c => c.value === relation.cardinality)?.label || "1:N";
       
       // Use CSS variable fallbacks for proper theming
@@ -362,6 +552,7 @@ export function DataModelingView() {
         <g
           key={relation.id}
           className="cursor-pointer"
+          style={{ opacity: bothVisible ? 1 : 0.3 }}
           onClick={() => setSelectedRelation(isSelected ? null : relation.id)}
           onDoubleClick={() => {
             setEditingRelation(relation);
@@ -422,7 +613,7 @@ export function DataModelingView() {
         </g>
       );
     });
-  };
+  }, [relations, selectedRelation, scrollTrigger, dataSources, tablePositions]);
 
   if (dataSources.length === 0) {
     return (
@@ -477,17 +668,39 @@ export function DataModelingView() {
               <Info className="h-4 w-4 mr-2" />
               {showHelp ? "Hide" : "Show"} Help
             </Button>
-            <Button
-              size="sm"
-              onClick={analyzeRelationships}
-              disabled={isAnalyzing || dataSources.length < 2}
+            {isAnalyzing && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Detecting relations...
+              </Badge>
+            )}
+            {relations.length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  // Show dialog to select which relation to merge
+                  if (relations.length === 1) {
+                    setMergeRelation(relations[0]);
+                  }
+                  setShowMergeDialog(true);
+                }}
+              >
+                <Merge className="h-4 w-4 mr-2" />
+                Create Master Table
+              </Button>
+            )}
+            <Button 
+              variant={showCorrelationPanel ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => setShowCorrelationPanel(!showCorrelationPanel)}
             >
-              {isAnalyzing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              {showCorrelationPanel ? (
+                <PanelRightClose className="h-4 w-4 mr-2" />
               ) : (
-                <Zap className="h-4 w-4 mr-2" />
+                <PanelRightOpen className="h-4 w-4 mr-2" />
               )}
-              Auto-Detect Relations
+              Correlations
             </Button>
           </div>
         </div>
@@ -498,39 +711,45 @@ export function DataModelingView() {
             <div className="max-w-4xl mx-auto flex items-start gap-4">
               <Lightbulb className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
               <div className="text-sm space-y-1">
-                <p className="font-medium">How to use Data Modeling (Power BI style):</p>
+                <p className="font-medium">How to use Data Modeling:</p>
                 <ul className="text-muted-foreground space-y-1">
                   <li>• <strong>Drag tables</strong> to rearrange them on the canvas</li>
                   <li>• <strong>Click a column</strong> then click another column in a different table to create a relationship</li>
                   <li>• <strong>Click a line</strong> to select it, <strong>double-click</strong> to edit cardinality (1:1, 1:N, N:1, N:N)</li>
                   <li>• <strong>Right-click a column</strong> to change its data type</li>
-                  <li>• Use <strong>Auto-Detect</strong> to find matching columns automatically (even with different names!)</li>
+                  <li>• <strong>Relationships auto-detect</strong> when you add new data sources - matching columns are connected automatically!</li>
+                  <li>• Use <strong>Create Master Table</strong> to merge tables based on relationships - creates a combined dataset!</li>
                 </ul>
               </div>
             </div>
           </div>
         )}
 
-        {/* Canvas - Full width and height */}
-        <div
-          ref={canvasRef}
-          className="flex-1 relative overflow-auto"
-          style={{ 
-            backgroundColor: 'var(--canvas-bg-color, #f9fafb)',
-            backgroundImage: 'radial-gradient(circle, var(--canvas-dot-color, #d1d5db) 1px, transparent 1px)',
-            backgroundSize: '20px 20px',
-            minHeight: 'calc(100vh - 120px)',
-          }}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onClick={(e) => {
-            if (e.target === canvasRef.current) {
-              cancelConnection();
-              setSelectedRelation(null);
-            }
-          }}
-        >
+        {/* Main content area with canvas and correlation panel */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Canvas - Dynamic width based on panel state */}
+          <div
+            ref={canvasRef}
+            className={cn(
+              "flex-1 relative overflow-auto transition-all duration-300",
+              showCorrelationPanel ? "mr-0" : ""
+            )}
+            style={{ 
+              backgroundColor: 'var(--canvas-bg-color, #f9fafb)',
+              backgroundImage: 'radial-gradient(circle, var(--canvas-dot-color, #d1d5db) 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+              minHeight: 'calc(100vh - 120px)',
+            }}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onClick={(e) => {
+              if (e.target === canvasRef.current) {
+                cancelConnection();
+                setSelectedRelation(null);
+              }
+            }}
+          >
           {/* SVG layer for relationship lines */}
           <svg
             ref={svgRef}
@@ -577,15 +796,24 @@ export function DataModelingView() {
                 </div>
 
                 {/* Columns */}
-                <div className="max-h-[280px] overflow-y-auto">
-                  {ds.schema.columns.map((col) => (
+                <div className="max-h-[280px] overflow-y-auto" onScroll={handleTableScroll}>
+                  {ds.schema.columns.map((col) => {
+                    const isConnected = isColumnConnected(ds.id, col.name);
+                    const isActiveSource = connectionState.isConnecting && connectionState.sourceId === ds.id && connectionState.sourceColumn === col.name;
+                    
+                    return (
                     <Tooltip key={col.name}>
                       <TooltipTrigger asChild>
                         <div
+                          ref={(el) => {
+                            if (el) columnRefs.current.set(`${ds.id}-${col.name}`, el);
+                          }}
                           className={cn(
-                            "column-row px-3 py-2 flex items-center gap-2 border-b border-border last:border-0 hover:bg-muted/50 cursor-pointer transition-colors",
+                            "column-row px-3 py-2 flex items-center gap-2 border-b border-border last:border-0 cursor-pointer transition-all",
                             isPrimaryKey(col.name) && "bg-amber-50 dark:bg-amber-950/30",
-                            connectionState.isConnecting && connectionState.sourceId === ds.id && connectionState.sourceColumn === col.name && "bg-primary/20"
+                            isActiveSource && "bg-primary/30 ring-2 ring-primary ring-inset",
+                            isConnected && !isActiveSource && "bg-primary/10 border-l-4 border-l-primary",
+                            !isConnected && !isActiveSource && "hover:bg-muted/50"
                           )}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -604,8 +832,14 @@ export function DataModelingView() {
                           }}
                         >
                           {getColumnIcon(col.type)}
-                          <span className="font-mono text-xs flex-1 truncate">{col.name}</span>
+                          <span className={cn(
+                            "font-mono text-xs flex-1 truncate",
+                            isConnected && "font-semibold"
+                          )}>{col.name}</span>
                           <div className="flex items-center gap-1">
+                            {isConnected && (
+                              <Link2 className="h-3 w-3 text-primary" />
+                            )}
                             {isPrimaryKey(col.name) && (
                               <Key className="h-3 w-3 text-amber-500" />
                             )}
@@ -623,13 +857,17 @@ export function DataModelingView() {
                           <p className="font-mono font-medium">{col.name}</p>
                           <p className="text-xs">Type: {col.type}</p>
                           <p className="text-xs">Unique values: {col.uniqueCount}</p>
+                          {isConnected && (
+                            <p className="text-xs text-primary font-medium">✓ Connected to relationship</p>
+                          )}
                           <p className="text-xs text-muted-foreground mt-1">
                             Click to create relationship • Right-click to change type
                           </p>
                         </div>
                       </TooltipContent>
                     </Tooltip>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             );
@@ -640,6 +878,106 @@ export function DataModelingView() {
             <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg flex items-center gap-2 z-50">
               <Link2 className="h-4 w-4" />
               <span className="text-sm">Click a column in another table to connect, or click empty space to cancel</span>
+            </div>
+          )}
+          </div>
+
+          {/* Correlation Panel - Right Side */}
+          {showCorrelationPanel && (
+            <div className="w-[450px] border-l border-border bg-card shrink-0 flex flex-col overflow-hidden">
+              <ScrollArea className="flex-1 h-full">
+                <div className="p-4 space-y-4">
+                  {/* Panel Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                      <h2 className="font-semibold">Correlation Analysis</h2>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">
+                      {dataSources.length} sources
+                    </Badge>
+                  </div>
+
+                  {/* Data Source Selector for Individual Correlation */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Select table for analysis:
+                    </label>
+                    <Select
+                      value={selectedDataSourceForCorr || dataSources[0]?.id || ""}
+                      onValueChange={setSelectedDataSourceForCorr}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select a table..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dataSources.map((ds) => (
+                          <SelectItem key={ds.id} value={ds.id}>
+                            <div className="flex items-center gap-2">
+                              <FileSpreadsheet className="h-3 w-3" />
+                              <span className="text-sm">{ds.name}</span>
+                              <Badge variant="secondary" className="text-[9px] ml-1">
+                                {ds.schema.columns.filter(c => c.type === "numeric").length} numeric
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Individual Table Correlation Matrix */}
+                  {(selectedDataSourceForCorr || dataSources[0]) && (
+                    <div className="border rounded-lg bg-background p-4">
+                      <CorrelationMatrix
+                        dataSource={
+                          dataSources.find((ds) => ds.id === (selectedDataSourceForCorr || dataSources[0]?.id)) ||
+                          dataSources[0]
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {/* Combined Correlation Matrix when relations exist */}
+                  {relations.length > 0 && dataSources.length >= 2 && (
+                    <CombinedCorrelationMatrix
+                      dataSources={dataSources}
+                      relationColumns={relations.map((r) => ({
+                        sourceCol: r.sourceColumn,
+                        targetCol: r.targetColumn,
+                      }))}
+                    />
+                  )}
+
+                  {/* Quick Guide for Executives */}
+                  <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      <span className="text-sm font-medium">Executive Summary</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-2">
+                      <p>
+                        <strong>What is Correlation?</strong><br />
+                        Correlation shows how two numbers change together. Think of it like:
+                        "When sales go up, do profits also go up?"
+                      </p>
+                      <p>
+                        <strong>Reading the Matrix:</strong>
+                      </p>
+                      <ul className="pl-3 space-y-1">
+                        <li>• <span className="text-purple-600 font-medium">Purple</span> = Both go up together (good for predictions)</li>
+                        <li>• <span className="text-orange-600 font-medium">Orange/Red</span> = One goes up, other goes down</li>
+                        <li>• <span className="text-gray-500 font-medium">Light</span> = No clear pattern</li>
+                      </ul>
+                      <p>
+                        <strong>Why It Matters:</strong><br />
+                        Find what drives your key metrics. If "Marketing Spend" correlates 
+                        with "Revenue", increasing marketing might boost revenue.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
             </div>
           )}
         </div>
@@ -760,6 +1098,115 @@ export function DataModelingView() {
                 setEditingColumn(null);
               }}>
                 Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Master Table Dialog */}
+        <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Merge className="h-5 w-5 text-primary" />
+                Create Master Table
+              </DialogTitle>
+              <DialogDescription>
+                Merge two tables based on their relationship to create a combined dataset you can use in your dashboard.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Relationship to Merge</label>
+                <Select
+                  value={mergeRelation?.id || ''}
+                  onValueChange={(value) => {
+                    const rel = relations.find(r => r.id === value);
+                    setMergeRelation(rel || null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a relationship..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {relations.map((rel) => {
+                      const source = dataSources.find(d => d.id === rel.sourceId);
+                      const target = dataSources.find(d => d.id === rel.targetId);
+                      return (
+                        <SelectItem key={rel.id} value={rel.id}>
+                          <span className="font-mono text-xs">
+                            {source?.name} ↔ {target?.name}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {mergeRelation && (
+                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-center flex-1">
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        <Table2 className="h-4 w-4 text-primary" />
+                        <span className="font-medium text-sm">
+                          {dataSources.find(d => d.id === mergeRelation.sourceId)?.name}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {mergeRelation.sourceColumn}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 px-4">
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <Badge className="text-[10px]">
+                        {CARDINALITY_OPTIONS.find(c => c.value === mergeRelation.cardinality)?.label}
+                      </Badge>
+                    </div>
+                    <div className="text-center flex-1">
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        <Table2 className="h-4 w-4 text-primary" />
+                        <span className="font-medium text-sm">
+                          {dataSources.find(d => d.id === mergeRelation.targetId)?.name}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {mergeRelation.targetColumn}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                    This will create a new merged table with all columns from both tables, joined on the relationship columns.
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setShowMergeDialog(false);
+                setMergeRelation(null);
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => mergeRelation && createMergedTable(mergeRelation)}
+                disabled={!mergeRelation || isMerging}
+              >
+                {isMerging ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Merge className="h-4 w-4 mr-2" />
+                    Create Master Table
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -104,6 +104,8 @@ export function PieChartComponent({ config, data, onDrillDown, onCrossFilter, cr
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
               formatter={(value: number) => [value.toLocaleString(), yMetric]}
             />
             <Legend

@@ -57,13 +57,17 @@ export function HistogramChartComponent({ config, data }: HistogramChartProps) {
   });
 
   const titlePosition = config.titlePosition || "top";
+  
+  // Generate axis titles - for histogram, x-axis is the value range and y-axis is frequency
+  const xAxisTitle = config.xAxisTitle || `${valueField} Range`;
+  const yAxisTitle = config.yAxisTitle || "Frequency";
 
   return (
     <StyledChartCard>
       <ChartTitleHeader title={config.title} position={titlePosition} />
       <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={bins} margin={{ left: 0, right: 0 }}>
+          <BarChart data={bins} margin={{ left: 10, right: 10, top: 10, bottom: 45 }}>
             <CartesianGrid
               strokeDasharray="3 3"
               vertical={false}
@@ -79,12 +83,14 @@ export function HistogramChartComponent({ config, data }: HistogramChartProps) {
               angle={-45}
               textAnchor="end"
               height={50}
+              label={{ value: xAxisTitle, position: 'bottom', offset: 30, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             />
             <YAxis
               tick={{ fontSize: 11 }}
               tickLine={false}
               axisLine={false}
               className="text-muted-foreground fill-muted-foreground"
+              label={{ value: yAxisTitle, angle: -90, position: 'insideLeft', offset: 5, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             />
             <Tooltip
               contentStyle={{
@@ -94,6 +100,8 @@ export function HistogramChartComponent({ config, data }: HistogramChartProps) {
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
               formatter={(value: number) => [value, "Count"]}
               labelFormatter={(label) => `Range: ${label}`}
             />

@@ -110,6 +110,10 @@ export function BoxPlotChartComponent({ config, data }: BoxPlotChartProps) {
     chartHeight - padding - ((value - globalMin) / range) * (chartHeight - 2 * padding);
 
   const titlePosition = config.titlePosition || "top";
+  
+  // Generate axis titles from column names if not provided
+  const xAxisTitle = config.xAxisTitle || categoryField || "Category";
+  const yAxisTitle = config.yAxisTitle || valueField;
 
   return (
     <Card className="h-full bg-card border-border">
@@ -125,6 +129,17 @@ export function BoxPlotChartComponent({ config, data }: BoxPlotChartProps) {
             stroke="currentColor"
             className="text-border"
           />
+          {/* Y-axis title */}
+          <text
+            x={12}
+            y={chartHeight / 2}
+            textAnchor="middle"
+            className="text-muted-foreground fill-muted-foreground"
+            fontSize={10}
+            transform={`rotate(-90, 12, ${chartHeight / 2})`}
+          >
+            {yAxisTitle}
+          </text>
           {/* Y-axis labels */}
           {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
             const value = globalMin + pct * range;

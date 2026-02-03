@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Table2,
   Hash,
@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,16 +31,74 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDashboardStore } from "@/lib/store";
 import { EnhancedFileUpload } from "@/components/enhanced-file-upload";
 
 export function DataView() {
-  const { schema, rawData, fileName, setCurrentView, dataSources } = useDashboardStore();
+  const { schema, rawData, fileName, setCurrentView, dataSources, pages, removeDataSource } = useDashboardStore();
   const [showAddData, setShowAddData] = useState(false);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [previewTable, setPreviewTable] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ tableId: string; tableName: string; linkedCharts: { pageId: string; pageName: string; chartId: string; chartTitle: string }[] } | null>(null);
+
+  // Get all charts that use columns from a specific data source
+  const getLinkedCharts = (tableId: string) => {
+    const dataSource = dataSources.find(ds => ds.id === tableId);
+    if (!dataSource) return [];
+    
+    const columnNames = dataSource.schema.columns.map(c => c.name);
+    const linkedCharts: { pageId: string; pageName: string; chartId: string; chartTitle: string }[] = [];
+    
+    pages.forEach(page => {
+      page.charts.forEach(chart => {
+        // Check if any chart axis or groupBy uses columns from this data source
+        const usedColumns = [
+          chart.xAxis,
+          ...(Array.isArray(chart.yAxis) ? chart.yAxis : [chart.yAxis]),
+          chart.groupBy,
+          chart.filterColumn,
+        ].filter(Boolean) as string[];
+        
+        const usesDataSource = usedColumns.some(col => columnNames.includes(col));
+        
+        if (usesDataSource) {
+          linkedCharts.push({
+            pageId: page.id,
+            pageName: page.name,
+            chartId: chart.id,
+            chartTitle: chart.title,
+          });
+        }
+      });
+    });
+    
+    return linkedCharts;
+  };
+
+  // Handle delete button click
+  const handleDeleteClick = (tableId: string, tableName: string) => {
+    const linkedCharts = getLinkedCharts(tableId);
+    
+    if (linkedCharts.length > 0) {
+      // Show warning dialog
+      setDeleteConfirm({ tableId, tableName, linkedCharts });
+    } else {
+      // Delete directly
+      removeDataSource(tableId);
+    }
+  };
+
+  // Confirm deletion
+  const confirmDelete = () => {
+    if (deleteConfirm) {
+      removeDataSource(deleteConfirm.tableId);
+      setDeleteConfirm(null);
+    }
+  };
 
   const getColumnIcon = (type: string) => {
     switch (type) {
@@ -233,6 +292,14 @@ export function DataView() {
                         <ChevronDown className="h-4 w-4" />
                       )}
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeleteClick(table.id, table.name)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -372,6 +439,54 @@ export function DataView() {
               </p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Data Source
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong className="text-foreground">{deleteConfirm?.tableName}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {deleteConfirm && deleteConfirm.linkedCharts.length > 0 && (
+            <div className="space-y-3">
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm font-medium text-destructive mb-2">
+                  ⚠️ This data source is used by {deleteConfirm.linkedCharts.length} chart{deleteConfirm.linkedCharts.length > 1 ? 's' : ''}:
+                </p>
+                <ul className="text-sm text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                  {deleteConfirm.linkedCharts.map((chart, idx) => (
+                    <li key={idx} className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {chart.pageName}
+                      </Badge>
+                      <span className="truncate">{chart.chartTitle}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Deleting this data source will cause these charts to show errors or no data.
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Anyway
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -6,7 +6,7 @@ import { CardContent } from "@/components/ui/card";
 import { StyledChartCard } from "@/components/charts/styled-chart-card";
 import { ChartTitleHeader, ChartTitleFooter } from "@/components/charts/chart-title";
 import { cn } from "@/lib/utils";
-import { calculateKPI, formatNumber } from "@/lib/data-utils";
+import { calculateKPI, formatNumber, calculateKPIWithFormula } from "@/lib/data-utils";
 import type { ChartConfig } from "@/lib/store";
 
 interface KPICardProps {
@@ -59,9 +59,22 @@ function calculateDataDrivenTrend(
 
 export function KPICard({ config, data }: KPICardProps) {
   const metric = Array.isArray(config.yAxis) ? config.yAxis[0] : config.yAxis;
-  if (!metric) return null;
+  
+  // Allow formula-based KPIs without requiring yAxis
+  if (!metric && !config.formula) return null;
 
-  const value = calculateKPI(data, metric, config.aggregation || "sum");
+  // Calculate value - use formula if provided, otherwise use standard aggregation
+  let value: number;
+  let metricLabel: string;
+  
+  if (config.formula) {
+    value = calculateKPIWithFormula(data, config.formula);
+    metricLabel = config.formulaLabel || config.formula;
+  } else {
+    value = calculateKPI(data, metric!, config.aggregation || "sum");
+    metricLabel = `${config.aggregation || "sum"} of ${metric}`;
+  }
+  
   const formattedValue = formatNumber(value);
 
   // Use trend data from config (provided by LLM analysis)
@@ -70,8 +83,12 @@ export function KPICard({ config, data }: KPICardProps) {
     if (config.trend !== undefined && config.trendValue !== undefined) {
       return { trend: config.trend, trendValue: config.trendValue };
     }
-    return calculateDataDrivenTrend(data, metric, config.aggregation || "sum");
-  }, [config.trend, config.trendValue, data, metric, config.aggregation]);
+    // For formula-based KPIs, we can't easily calculate trend, so default to flat
+    if (config.formula) {
+      return { trend: "flat" as const, trendValue: 0 };
+    }
+    return calculateDataDrivenTrend(data, metric!, config.aggregation || "sum");
+  }, [config.trend, config.trendValue, config.formula, data, metric, config.aggregation]);
 
   const trend = calculatedTrend.trend;
   const trendValue = calculatedTrend.trendValue.toFixed(1);
@@ -85,7 +102,7 @@ export function KPICard({ config, data }: KPICardProps) {
           <div>
             <p className="text-3xl font-bold text-foreground font-mono">{formattedValue}</p>
             <p className="text-xs text-muted-foreground mt-1 capitalize font-mono">
-              {config.aggregation || "sum"} of {metric}
+              {metricLabel}
             </p>
           </div>
           <div

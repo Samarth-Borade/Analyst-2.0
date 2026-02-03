@@ -63,13 +63,17 @@ export function ComboChartComponent({ config, data }: ComboChartProps) {
   });
 
   const titlePosition = config.titlePosition || "top";
+  
+  // Generate axis titles from column names if not provided
+  const xAxisTitle = config.xAxisTitle || config.xAxis;
+  const yAxisTitle = config.yAxisTitle || barMetric;
 
   return (
     <StyledChartCard>
       <ChartTitleHeader title={config.title} position={titlePosition} />
       <CardContent className={titlePosition === "bottom" ? "pt-4" : "pt-0"}>
         <ResponsiveContainer width="100%" height={200}>
-          <ComposedChart data={chartData} margin={{ left: 0, right: 0 }}>
+          <ComposedChart data={chartData} margin={{ left: 10, right: 10, top: 10, bottom: 25 }}>
             <CartesianGrid
               strokeDasharray="3 3"
               vertical={false}
@@ -82,6 +86,7 @@ export function ComboChartComponent({ config, data }: ComboChartProps) {
               tickLine={false}
               axisLine={false}
               className="text-muted-foreground fill-muted-foreground"
+              label={{ value: xAxisTitle, position: 'bottom', offset: 10, fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
             />
             <YAxis
               yAxisId="left"
@@ -92,6 +97,7 @@ export function ComboChartComponent({ config, data }: ComboChartProps) {
                 value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
               }
               className="text-muted-foreground fill-muted-foreground"
+              label={{ value: yAxisTitle, angle: -90, position: 'insideLeft', offset: 5, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             />
             {barMetric !== lineMetric && (
               <YAxis
@@ -114,6 +120,8 @@ export function ComboChartComponent({ config, data }: ComboChartProps) {
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
               formatter={(value: number, name: string) => [
                 value.toLocaleString(),
                 name,

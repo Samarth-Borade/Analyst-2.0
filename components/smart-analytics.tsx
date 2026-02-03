@@ -10,8 +10,8 @@ import {
   Link2,
   BarChart3,
   ArrowRight,
-  ChevronDown,
-  ChevronUp,
+  ArrowUpRight,
+  ArrowDownRight,
   LineChart,
   Calculator,
   Play,
@@ -20,12 +20,22 @@ import {
   Info,
   CheckCircle,
   X,
+  Target,
+  Brain,
+  Rocket,
+  ChevronRight,
+  MessageSquare,
+  HelpCircle,
+  Wand2,
+  Clock,
+  Percent,
+  Activity,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -45,11 +55,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -66,74 +71,96 @@ import {
 } from "@/lib/analytics-engine";
 import { cn } from "@/lib/utils";
 
-// Insight Card Component
+// Modern Insight Card Component
 function InsightCard({ insight, onDismiss }: { insight: Insight; onDismiss?: () => void }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const iconMap = {
-    anomaly: <AlertTriangle className="h-4 w-4" />,
-    trend: insight.changePercent && insight.changePercent > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />,
-    correlation: <Link2 className="h-4 w-4" />,
-    pattern: <BarChart3 className="h-4 w-4" />,
-    summary: <Info className="h-4 w-4" />,
-    recommendation: <Lightbulb className="h-4 w-4" />,
+    anomaly: AlertTriangle,
+    trend: insight.changePercent && insight.changePercent > 0 ? TrendingUp : TrendingDown,
+    correlation: Link2,
+    pattern: Activity,
+    summary: BarChart3,
+    recommendation: Lightbulb,
   };
 
-  const colorMap = {
-    info: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400",
-    warning: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400",
-    critical: "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400",
-    success: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400",
+  const Icon = iconMap[insight.type];
+
+  const styleMap = {
+    info: {
+      bg: "bg-gradient-to-br from-blue-500/10 to-cyan-500/10",
+      border: "border-blue-500/20",
+      icon: "text-blue-500",
+      badge: "bg-blue-500/20 text-blue-600 dark:text-blue-400",
+    },
+    warning: {
+      bg: "bg-gradient-to-br from-amber-500/10 to-orange-500/10",
+      border: "border-amber-500/20",
+      icon: "text-amber-500",
+      badge: "bg-amber-500/20 text-amber-600 dark:text-amber-400",
+    },
+    critical: {
+      bg: "bg-gradient-to-br from-red-500/10 to-pink-500/10",
+      border: "border-red-500/20",
+      icon: "text-red-500",
+      badge: "bg-red-500/20 text-red-600 dark:text-red-400",
+    },
+    success: {
+      bg: "bg-gradient-to-br from-emerald-500/10 to-green-500/10",
+      border: "border-emerald-500/20",
+      icon: "text-emerald-500",
+      badge: "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+    },
   };
 
-  const badgeVariantMap = {
-    info: "secondary" as const,
-    warning: "outline" as const,
-    critical: "destructive" as const,
-    success: "default" as const,
-  };
+  const style = styleMap[insight.severity];
 
   return (
-    <Card className={cn("border transition-all", colorMap[insight.severity])}>
-      <CardContent className="p-3">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5">{iconMap[insight.type]}</div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-medium text-sm truncate">{insight.title}</h4>
-              <Badge variant={badgeVariantMap[insight.severity]} className="text-xs shrink-0">
-                {Math.round(insight.confidence * 100)}% conf
-              </Badge>
-            </div>
-            <p className="text-xs opacity-80">{insight.description}</p>
-            {insight.relatedFields && insight.relatedFields.length > 0 && (
-              <div className="flex gap-1 mt-2 flex-wrap">
-                {insight.relatedFields.map((field) => (
-                  <Badge key={field} variant="outline" className="text-xs">
-                    {field}
-                  </Badge>
-                ))}
-              </div>
-            )}
+    <div className={cn(
+      "group relative rounded-xl border p-4 transition-all hover:shadow-lg hover:scale-[1.01]",
+      style.bg,
+      style.border
+    )}>
+      <div className="flex gap-4">
+        <div className={cn(
+          "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+          "bg-white/80 dark:bg-gray-900/80 shadow-sm"
+        )}>
+          <Icon className={cn("h-5 w-5", style.icon)} />
+        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="font-semibold text-sm leading-tight">{insight.title}</h4>
+            <Badge className={cn("shrink-0 text-[10px] font-medium border-0", style.badge)}>
+              {Math.round(insight.confidence * 100)}% confidence
+            </Badge>
           </div>
-          {onDismiss && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 opacity-50 hover:opacity-100"
-              onClick={onDismiss}
-            >
-              <X className="h-3 w-3" />
-            </Button>
+          <p className="text-sm text-muted-foreground leading-relaxed">{insight.description}</p>
+          {insight.relatedFields && insight.relatedFields.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap pt-1">
+              {insight.relatedFields.map((field) => (
+                <Badge key={field} variant="secondary" className="text-[10px] font-mono">
+                  {field}
+                </Badge>
+              ))}
+            </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      {onDismiss && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={onDismiss}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
   );
 }
 
-// Forecast Chart Component
-function ForecastChart({ forecast, metricName }: { forecast: Forecast; metricName: string }) {
+// Modern Forecast Visualization
+function ForecastVisualization({ forecast, metricName }: { forecast: Forecast; metricName: string }) {
   const allData = [...forecast.historical, ...forecast.predicted];
   const maxValue = Math.max(...allData.map((d) => d.value), ...forecast.confidence.upper.map((d) => d.value));
   
@@ -143,108 +170,219 @@ function ForecastChart({ forecast, metricName }: { forecast: Forecast; metricNam
     return v.toFixed(0);
   };
 
+  const trendColor = forecast.metrics.trend === "increasing" 
+    ? "text-emerald-500" 
+    : forecast.metrics.trend === "decreasing" 
+    ? "text-red-500" 
+    : "text-gray-500";
+
+  const trendIcon = forecast.metrics.trend === "increasing" 
+    ? ArrowUpRight 
+    : forecast.metrics.trend === "decreasing" 
+    ? ArrowDownRight 
+    : ArrowRight;
+
+  const TrendIcon = trendIcon;
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>Historical</span>
-        <span>Forecast ({forecast.predicted.length} periods)</span>
-      </div>
-      
-      {/* Simple bar visualization */}
-      <div className="flex items-end gap-1 h-32">
-        {forecast.historical.map((point, i) => (
-          <div key={`h-${i}`} className="flex-1 flex flex-col items-center gap-1">
-            <div
-              className="w-full bg-primary rounded-t transition-all"
-              style={{ height: `${(point.value / maxValue) * 100}%` }}
-            />
-            <span className="text-[9px] text-muted-foreground truncate max-w-full">
-              {typeof point.date === 'string' ? point.date.slice(5, 10) : ''}
-            </span>
+    <div className="space-y-6">
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+              <TrendIcon className={cn("h-4 w-4", trendColor)} />
+            </div>
           </div>
-        ))}
-        <div className="w-px h-full bg-border mx-1" />
-        {forecast.predicted.map((point, i) => (
-          <div key={`p-${i}`} className="flex-1 flex flex-col items-center gap-1">
-            <TooltipProvider>
+          <p className="text-xs text-muted-foreground mb-1">Trend</p>
+          <p className={cn("text-lg font-bold capitalize", trendColor)}>
+            {forecast.metrics.trend}
+          </p>
+        </div>
+        <div className="rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <Percent className="h-4 w-4 text-blue-500" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mb-1">Growth Rate</p>
+          <p className="text-lg font-bold">
+            <span className={forecast.metrics.growthRate > 0 ? "text-emerald-500" : forecast.metrics.growthRate < 0 ? "text-red-500" : ""}>
+              {forecast.metrics.growthRate > 0 ? "+" : ""}{forecast.metrics.growthRate.toFixed(1)}%
+            </span>
+            <span className="text-xs text-muted-foreground font-normal">/period</span>
+          </p>
+        </div>
+        <div className="rounded-xl bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/20 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <Target className="h-4 w-4 text-emerald-500" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mb-1">Accuracy</p>
+          <p className="text-lg font-bold text-emerald-500">
+            {(forecast.metrics.accuracy * 100).toFixed(0)}%
+          </p>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="rounded-xl bg-gradient-to-br from-gray-500/5 to-gray-500/10 border p-4">
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-primary" />
+            <span>Historical Data</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-primary/40 border-2 border-dashed border-primary" />
+            <span>Predicted ({forecast.predicted.length} periods)</span>
+          </div>
+        </div>
+        
+        <div className="flex items-end gap-1 h-40">
+          {forecast.historical.map((point, i) => (
+            <TooltipProvider key={`h-${i}`}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="w-full relative">
-                    {/* Confidence interval */}
+                  <div className="flex-1 flex flex-col items-center gap-1 group cursor-pointer">
                     <div
-                      className="absolute w-full bg-primary/20 rounded-t"
-                      style={{ 
-                        height: `${((forecast.confidence.upper[i]?.value || point.value) / maxValue) * 100}%`,
-                        bottom: `${((forecast.confidence.lower[i]?.value || 0) / maxValue) * 100}%`,
-                      }}
-                    />
-                    {/* Predicted value */}
-                    <div
-                      className="w-full bg-primary/60 rounded-t border-2 border-dashed border-primary"
+                      className="w-full bg-primary rounded-t transition-all group-hover:bg-primary/80"
                       style={{ height: `${(point.value / maxValue) * 100}%` }}
                     />
+                    <span className="text-[9px] text-muted-foreground truncate max-w-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      {typeof point.date === 'string' ? point.date.slice(5, 10) : ''}
+                    </span>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="text-xs">
-                    Predicted: {formatValue(point.value)}
-                    <br />
+                  <p className="text-xs font-medium">{formatValue(point.value)}</p>
+                  <p className="text-xs text-muted-foreground">{String(point.date)}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ))}
+          <div className="w-px h-full bg-dashed-border mx-2 relative">
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-background px-1">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+            </div>
+          </div>
+          {forecast.predicted.map((point, i) => (
+            <TooltipProvider key={`p-${i}`}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex-1 flex flex-col items-center gap-1 group cursor-pointer">
+                    <div className="w-full relative">
+                      <div
+                        className="absolute w-full bg-primary/10 rounded-t"
+                        style={{ 
+                          height: `${((forecast.confidence.upper[i]?.value || point.value) / maxValue) * 100}%`,
+                        }}
+                      />
+                      <div
+                        className="w-full bg-primary/40 rounded-t border-2 border-dashed border-primary relative z-10 transition-all group-hover:bg-primary/60"
+                        style={{ height: `${(point.value / maxValue) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-muted-foreground truncate max-w-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      {typeof point.date === 'string' ? point.date.slice(5, 10) : ''}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs font-medium">Predicted: {formatValue(point.value)}</p>
+                  <p className="text-xs text-muted-foreground">
                     Range: {formatValue(forecast.confidence.lower[i]?.value || 0)} - {formatValue(forecast.confidence.upper[i]?.value || 0)}
                   </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <span className="text-[9px] text-muted-foreground truncate max-w-full">
-              {typeof point.date === 'string' ? point.date.slice(5, 10) : ''}
-            </span>
-          </div>
-        ))}
-      </div>
-      
-      {/* Metrics */}
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="p-2 bg-muted rounded">
-          <p className="text-xs text-muted-foreground">Trend</p>
-          <p className={cn(
-            "text-sm font-medium",
-            forecast.metrics.trend === "increasing" ? "text-green-600" :
-            forecast.metrics.trend === "decreasing" ? "text-red-600" : "text-muted-foreground"
-          )}>
-            {forecast.metrics.trend === "increasing" ? "📈" : forecast.metrics.trend === "decreasing" ? "📉" : "➡️"} {forecast.metrics.trend}
-          </p>
-        </div>
-        <div className="p-2 bg-muted rounded">
-          <p className="text-xs text-muted-foreground">Growth Rate</p>
-          <p className="text-sm font-medium">
-            {forecast.metrics.growthRate > 0 ? "+" : ""}{forecast.metrics.growthRate.toFixed(1)}%/period
-          </p>
-        </div>
-        <div className="p-2 bg-muted rounded">
-          <p className="text-xs text-muted-foreground">Model Fit</p>
-          <p className="text-sm font-medium">
-            {(forecast.metrics.accuracy * 100).toFixed(0)}%
-          </p>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-// What-If Scenario Component
+// Feature Tab Button Component
+function FeatureTab({ 
+  active, 
+  onClick, 
+  icon: Icon, 
+  title, 
+  description,
+  color,
+}: { 
+  active: boolean; 
+  onClick: () => void; 
+  icon: React.ElementType; 
+  title: string; 
+  description: string;
+  color: string;
+}) {
+  const colorMap: Record<string, { bg: string; border: string; icon: string }> = {
+    purple: {
+      bg: "from-violet-500/20 to-purple-500/20",
+      border: "border-violet-500/30",
+      icon: "text-violet-500",
+    },
+    blue: {
+      bg: "from-blue-500/20 to-cyan-500/20",
+      border: "border-blue-500/30",
+      icon: "text-blue-500",
+    },
+    orange: {
+      bg: "from-orange-500/20 to-amber-500/20",
+      border: "border-orange-500/30",
+      icon: "text-orange-500",
+    },
+  };
+
+  const c = colorMap[color];
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 p-4 rounded-xl border-2 transition-all text-left",
+        active 
+          ? cn("bg-gradient-to-br", c.bg, c.border, "shadow-lg") 
+          : "border-transparent hover:border-border bg-muted/30 hover:bg-muted/50"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className={cn(
+          "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+          active ? cn("bg-white/80 dark:bg-gray-900/80", c.icon) : "bg-muted text-muted-foreground"
+        )}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h3 className={cn("font-semibold text-sm", active && "text-foreground")}>{title}</h3>
+          <p className="text-xs text-muted-foreground truncate">{description}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// Modern What-If Panel
 function WhatIfPanel({
   data,
   schema,
+  onApplyToPreview,
 }: {
   data: Record<string, unknown>[];
   schema: { columns: Array<{ name: string; type: string; isMetric?: boolean }> };
+  onApplyToPreview?: (field: string, changePercent: number) => void;
 }) {
   const [targetField, setTargetField] = useState<string>("");
   const [changePercent, setChangePercent] = useState<number>(10);
   const [scenario, setScenario] = useState<WhatIfScenario | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   const numericFields = useMemo(() => {
     return schema?.columns
-      ?.filter((col) => col.type === "number" || col.isMetric)
+      ?.filter((col) => col.type === "number" || col.type === "numeric" || col.isMetric)
       ?.map((col) => col.name) || [];
   }, [schema]);
 
@@ -257,17 +395,21 @@ function WhatIfPanel({
   const runScenario = () => {
     if (!targetField || !data || data.length === 0) return;
 
-    // Find other numeric fields to show impact
-    const impactedFields = numericFields
-      .filter((f) => f !== targetField)
-      .slice(0, 3)
-      .map((field) => ({
-        field,
-        elasticity: 0.5 + Math.random() * 0.5, // Simulated elasticity
-      }));
+    setIsRunning(true);
+    
+    setTimeout(() => {
+      const impactedFields = numericFields
+        .filter((f) => f !== targetField)
+        .slice(0, 3)
+        .map((field) => ({
+          field,
+          elasticity: 0.5 + Math.random() * 0.5,
+        }));
 
-    const result = runWhatIfScenario(data, targetField, changePercent, impactedFields);
-    setScenario(result);
+      const result = runWhatIfScenario(data, targetField, changePercent, impactedFields);
+      setScenario(result);
+      setIsRunning(false);
+    }, 500);
   };
 
   const formatNumber = (v: number) => {
@@ -276,115 +418,228 @@ function WhatIfPanel({
     return v.toFixed(0);
   };
 
+  // Dynamic example questions based on actual fields
+  const exampleQuestions = useMemo(() => {
+    const questions: { text: string; field: string; change: number }[] = [];
+    if (numericFields.includes("Sales")) {
+      questions.push({ text: "What if Sales increase by 20%?", field: "Sales", change: 20 });
+    }
+    if (numericFields.includes("Cost")) {
+      questions.push({ text: "What if Cost decreases by 15%?", field: "Cost", change: -15 });
+    }
+    if (numericFields.includes("Quantity")) {
+      questions.push({ text: "What if Quantity doubles?", field: "Quantity", change: 100 });
+    }
+    if (numericFields.includes("Price")) {
+      questions.push({ text: "What if Price goes up 10%?", field: "Price", change: 10 });
+    }
+    if (numericFields.includes("Revenue")) {
+      questions.push({ text: "What if Revenue drops 25%?", field: "Revenue", change: -25 });
+    }
+    // Add generic ones if we don't have enough
+    if (questions.length < 3 && numericFields.length > 0) {
+      const remaining = numericFields.filter(f => !questions.some(q => q.field === f));
+      remaining.slice(0, 3 - questions.length).forEach(field => {
+        questions.push({ text: `What if ${field} changes by 15%?`, field, change: 15 });
+      });
+    }
+    return questions.slice(0, 3);
+  }, [numericFields]);
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label className="text-xs">What if...</Label>
-          <Select value={targetField} onValueChange={setTargetField}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select metric" />
-            </SelectTrigger>
-            <SelectContent>
-              {numericFields.map((field) => (
-                <SelectItem key={field} value={field}>
-                  {field}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs">Changed by</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              value={changePercent}
-              onChange={(e) => setChangePercent(Number(e.target.value))}
-              className="w-20"
-            />
-            <span className="text-sm">%</span>
+    <div className="space-y-6">
+      {/* Example Questions */}
+      {exampleQuestions.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <MessageSquare className="h-4 w-4" />
+            Try asking questions like:
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {exampleQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setTargetField(q.field);
+                  setChangePercent(q.change);
+                }}
+                className="px-3 py-2 text-xs rounded-full bg-muted/50 hover:bg-muted border border-transparent hover:border-border transition-all"
+              >
+                &ldquo;{q.text}&rdquo;
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="space-y-2">
-        <Label className="text-xs">Adjustment: {changePercent > 0 ? "+" : ""}{changePercent}%</Label>
-        <Slider
-          value={[changePercent]}
-          onValueChange={([v]) => setChangePercent(v)}
-          min={-50}
-          max={50}
-          step={1}
-          className="py-2"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>-50%</span>
-          <span>0%</span>
-          <span>+50%</span>
+      {/* Scenario Builder */}
+      <div className="rounded-xl bg-gradient-to-br from-orange-500/5 to-amber-500/5 border border-orange-500/20 p-5 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
+            <Wand2 className="h-5 w-5 text-orange-500" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Scenario Builder</h3>
+            <p className="text-xs text-muted-foreground">Simulate changes and see projected impacts</p>
+          </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">What if this metric...</Label>
+            <Select value={targetField} onValueChange={setTargetField}>
+              <SelectTrigger className="bg-background/80">
+                <SelectValue placeholder="Select metric" />
+              </SelectTrigger>
+              <SelectContent>
+                {numericFields.map((field) => (
+                  <SelectItem key={field} value={field}>
+                    {field}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Changed by...</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={changePercent}
+                onChange={(e) => setChangePercent(Number(e.target.value))}
+                className="bg-background/80"
+              />
+              <span className="text-sm font-medium">%</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium">
+              Adjustment: 
+              <span className={cn(
+                "ml-2 font-bold",
+                changePercent > 0 ? "text-emerald-500" : changePercent < 0 ? "text-red-500" : ""
+              )}>
+                {changePercent > 0 ? "+" : ""}{changePercent}%
+              </span>
+            </Label>
+          </div>
+          <div className="relative">
+            <Slider
+              value={[changePercent]}
+              onValueChange={([v]) => setChangePercent(v)}
+              min={-50}
+              max={50}
+              step={1}
+              className="py-2"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+              <span>-50%</span>
+              <span className="absolute left-1/2 -translate-x-1/2">0%</span>
+              <span>+50%</span>
+            </div>
+          </div>
+        </div>
+
+        <Button 
+          onClick={runScenario} 
+          className="w-full gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
+          disabled={isRunning || !targetField}
+        >
+          {isRunning ? (
+            <RefreshCw className="h-4 w-4 animate-spin" />
+          ) : (
+            <Rocket className="h-4 w-4" />
+          )}
+          Run Simulation
+        </Button>
       </div>
 
-      <Button onClick={runScenario} className="w-full gap-2">
-        <Calculator className="h-4 w-4" />
-        Run Scenario
-      </Button>
-
+      {/* Results */}
       {scenario && (
-        <Card className="border-primary/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Zap className="h-4 w-4 text-primary" />
-              Scenario Results
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Primary impact */}
-            <div className="flex items-center justify-between p-2 bg-muted rounded">
-              <span className="text-sm">{targetField}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{formatNumber(scenario.baselineValue)}</span>
-                <ArrowRight className="h-4 w-4" />
+        <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 p-5 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center">
+              <Zap className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Simulation Results</h3>
+              <p className="text-xs text-muted-foreground">Based on your scenario parameters</p>
+            </div>
+          </div>
+
+          {/* Primary Impact */}
+          <div className="rounded-lg bg-background/80 p-4">
+            <p className="text-xs text-muted-foreground mb-2">Primary Change</p>
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{targetField}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground">{formatNumber(scenario.baselineValue)}</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 <span className={cn(
-                  "text-sm font-medium",
-                  scenario.percentChange > 0 ? "text-green-600" : "text-red-600"
+                  "text-lg font-bold",
+                  scenario.percentChange > 0 ? "text-emerald-500" : "text-red-500"
                 )}>
                   {formatNumber(scenario.modifiedValue)}
                 </span>
               </div>
             </div>
+          </div>
 
-            {/* Impacted metrics */}
-            {scenario.impactedMetrics.length > 0 && (
+          {/* Ripple Effects */}
+          {scenario.impactedMetrics.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <Activity className="h-3 w-3" />
+                Projected Ripple Effects
+              </p>
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Projected Impact on Related Metrics:</p>
                 {scenario.impactedMetrics.map((impact) => (
-                  <div key={impact.metric} className="flex items-center justify-between text-sm">
-                    <span>{impact.metric}</span>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        impact.changePercent > 0 ? "text-green-600" : "text-red-600"
+                  <div 
+                    key={impact.metric} 
+                    className="flex items-center justify-between p-3 rounded-lg bg-background/50 hover:bg-background/80 transition-colors"
+                  >
+                    <span className="text-sm">{impact.metric}</span>
+                    <div className="flex items-center gap-3">
+                      <Badge className={cn(
+                        "text-xs",
+                        impact.changePercent > 0 
+                          ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+                          : "bg-red-500/20 text-red-600 dark:text-red-400"
                       )}>
                         {impact.changePercent > 0 ? "+" : ""}{impact.changePercent.toFixed(1)}%
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        ({formatNumber(impact.baseline)} → {formatNumber(impact.projected)})
+                      </Badge>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {formatNumber(impact.baseline)} → {formatNumber(impact.projected)}
                       </span>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          )}
+
+          {/* Preview on Dashboard Button */}
+          {onApplyToPreview && (
+            <Button 
+              onClick={() => onApplyToPreview(targetField, changePercent)}
+              className="w-full gap-2 bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white"
+            >
+              <Eye className="h-4 w-4" />
+              Preview on Dashboard
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 // Main Smart Analytics Panel
-export function SmartAnalyticsPanel() {
-  const { rawData, schema } = useDashboardStore();
+export function SmartAnalyticsPanel({ onClose }: { onClose?: () => void }) {
+  const { rawData, schema, applyWhatIfScenario, whatIfMode } = useDashboardStore();
   const [insights, setInsights] = useState<Insight[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
@@ -394,6 +649,12 @@ export function SmartAnalyticsPanel() {
   const [forecastField, setForecastField] = useState<string>("");
   const [forecastDateField, setForecastDateField] = useState<string>("");
   const [forecast, setForecast] = useState<Forecast | null>(null);
+
+  // Handle applying What-If scenario to dashboard
+  const handleApplyToPreview = (field: string, changePercent: number) => {
+    applyWhatIfScenario(field, changePercent);
+    onClose?.(); // Close the dialog
+  };
 
   const numericFields = useMemo(() => {
     return schema?.columns
@@ -407,7 +668,6 @@ export function SmartAnalyticsPanel() {
       ?.map((col) => col.name) || [];
   }, [schema]);
 
-  // Auto-detect fields for forecasting
   useEffect(() => {
     if (numericFields.length > 0 && !forecastField) {
       setForecastField(numericFields[0]);
@@ -421,7 +681,6 @@ export function SmartAnalyticsPanel() {
     if (!rawData || !schema) return;
 
     setIsLoading(true);
-    // Use setTimeout to allow UI to update
     setTimeout(() => {
       const newInsights = generateInsights(rawData, schema);
       setInsights(newInsights);
@@ -430,7 +689,6 @@ export function SmartAnalyticsPanel() {
     }, 100);
   };
 
-  // Generate insights on mount
   useEffect(() => {
     if (rawData && schema && insights.length === 0) {
       generateAllInsights();
@@ -445,164 +703,216 @@ export function SmartAnalyticsPanel() {
       const result = generateForecast(rawData, forecastDateField, forecastField, 6);
       setForecast(result);
       setIsLoading(false);
-    }, 100);
+    }, 300);
   };
 
   const visibleInsights = insights.filter((i) => !dismissedInsights.has(i.id));
 
   if (!rawData || rawData.length === 0) {
     return (
-      <Card className="h-full">
-        <CardContent className="flex items-center justify-center h-full text-muted-foreground">
-          <div className="text-center">
-            <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Upload data to see AI insights</p>
+      <div className="h-full flex items-center justify-center p-8">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center mx-auto">
+            <Brain className="h-8 w-8 text-violet-500" />
           </div>
-        </CardContent>
-      </Card>
+          <h3 className="font-semibold text-lg">AI Analytics Ready</h3>
+          <p className="text-sm text-muted-foreground">
+            Upload your data to unlock AI-powered insights, forecasting, and scenario analysis
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Smart Analytics
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
+            <Brain className="h-5 w-5 text-white" />
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={generateAllInsights}
-            disabled={isLoading}
-            className="gap-1"
-          >
-            <RefreshCw className={cn("h-3 w-3", isLoading && "animate-spin")} />
-            Refresh
-          </Button>
-        </CardTitle>
-      </CardHeader>
+          <div>
+            <h2 className="font-bold text-lg">AI Analytics</h2>
+            <p className="text-xs text-muted-foreground">Powered by machine learning</p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={generateAllInsights}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col px-4">
-        <TabsList className="grid grid-cols-3 mb-3">
-          <TabsTrigger value="insights" className="text-xs gap-1">
-            <Lightbulb className="h-3 w-3" />
-            Insights
-          </TabsTrigger>
-          <TabsTrigger value="forecast" className="text-xs gap-1">
-            <LineChart className="h-3 w-3" />
-            Forecast
-          </TabsTrigger>
-          <TabsTrigger value="whatif" className="text-xs gap-1">
-            <Calculator className="h-3 w-3" />
-            What-If
-          </TabsTrigger>
-        </TabsList>
+      {/* Feature Tabs */}
+      <div className="flex gap-3">
+        <FeatureTab
+          active={activeTab === "insights"}
+          onClick={() => setActiveTab("insights")}
+          icon={Lightbulb}
+          title="Insights"
+          description="Auto-discovered patterns"
+          color="purple"
+        />
+        <FeatureTab
+          active={activeTab === "forecast"}
+          onClick={() => setActiveTab("forecast")}
+          icon={LineChart}
+          title="Forecast"
+          description="Predict future trends"
+          color="blue"
+        />
+        <FeatureTab
+          active={activeTab === "whatif"}
+          onClick={() => setActiveTab("whatif")}
+          icon={Calculator}
+          title="What-If"
+          description="Simulate scenarios"
+          color="orange"
+        />
+      </div>
 
-        <TabsContent value="insights" className="flex-1 overflow-hidden m-0">
-          <ScrollArea className="h-[calc(100vh-300px)]">
+      {/* Content */}
+      {activeTab === "insights" && (
+        <div className="space-y-4 pb-8">
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                  <RefreshCw className="h-6 w-6 text-primary animate-spin" />
+                </div>
+                <p className="text-sm text-muted-foreground">Analyzing your data...</p>
               </div>
             ) : visibleInsights.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No insights to show</p>
-                <Button variant="link" size="sm" onClick={generateAllInsights}>
-                  Regenerate
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="h-12 w-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-emerald-500" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">All caught up!</p>
+                  <p className="text-sm text-muted-foreground">No new insights to show</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={generateAllInsights}>
+                  Regenerate Insights
                 </Button>
               </div>
             ) : (
-              <div className="space-y-2 pb-4">
-                {visibleInsights.map((insight) => (
-                  <InsightCard
-                    key={insight.id}
-                    insight={insight}
-                    onDismiss={() => setDismissedInsights((prev) => new Set([...prev, insight.id]))}
-                  />
-                ))}
+              visibleInsights.map((insight) => (
+                <InsightCard
+                  key={insight.id}
+                  insight={insight}
+                  onDismiss={() => setDismissedInsights((prev) => new Set([...prev, insight.id]))}
+                />
+              ))
+            )}
+        </div>
+      )}
+
+      {activeTab === "forecast" && (
+          <div className="space-y-6 pb-8">
+            {/* Intro */}
+            <div className="rounded-xl bg-gradient-to-br from-blue-500/5 to-cyan-500/5 border border-blue-500/20 p-5">
+              <div className="flex items-start gap-4">
+                <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
+                  <Eye className="h-5 w-5 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Predictive Forecasting</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Select a date field and metric below. Our algorithm will analyze historical patterns 
+                    to predict future values with confidence intervals.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Field Selectors */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium flex items-center gap-2">
+                  <Clock className="h-3 w-3" />
+                  Time Field
+                </Label>
+                <Select value={forecastDateField} onValueChange={setForecastDateField}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select date column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dateFields.map((field) => (
+                      <SelectItem key={field} value={field}>
+                        {field}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium flex items-center gap-2">
+                  <BarChart3 className="h-3 w-3" />
+                  Metric to Forecast
+                </Label>
+                <Select value={forecastField} onValueChange={setForecastField}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select metric" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {numericFields.map((field) => (
+                      <SelectItem key={field} value={field}>
+                        {field}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button
+              onClick={runForecast}
+              disabled={!forecastField || !forecastDateField || isLoading}
+              className="w-full gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
+            >
+              {isLoading ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <TrendingUp className="h-4 w-4" />
+              )}
+              Generate Forecast
+            </Button>
+
+            {forecast && forecast.predicted.length > 0 && (
+              <ForecastVisualization forecast={forecast} metricName={forecastField} />
+            )}
+
+            {forecast && forecast.predicted.length === 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-center">
+                <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-3" />
+                <p className="font-medium">Not Enough Data</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Need at least 3 historical data points to generate a forecast.
+                </p>
               </div>
             )}
-          </ScrollArea>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="forecast" className="flex-1 overflow-hidden m-0">
-          <ScrollArea className="h-[calc(100vh-300px)]">
-            <div className="space-y-4 pb-4">
-              {/* Field selectors */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="text-xs">Date Field</Label>
-                  <Select value={forecastDateField} onValueChange={setForecastDateField}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select date" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {dateFields.map((field) => (
-                        <SelectItem key={field} value={field}>
-                          {field}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Metric to Forecast</Label>
-                  <Select value={forecastField} onValueChange={setForecastField}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select metric" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {numericFields.map((field) => (
-                        <SelectItem key={field} value={field}>
-                          {field}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Button
-                onClick={runForecast}
-                disabled={!forecastField || !forecastDateField || isLoading}
-                className="w-full gap-2"
-              >
-                {isLoading ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                Generate Forecast
-              </Button>
-
-              {forecast && forecast.predicted.length > 0 && (
-                <ForecastChart forecast={forecast} metricName={forecastField} />
-              )}
-
-              {forecast && forecast.predicted.length === 0 && (
-                <div className="text-center py-4 text-muted-foreground text-sm">
-                  <p>Not enough historical data to generate forecast.</p>
-                  <p className="text-xs mt-1">Need at least 3 data points.</p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </TabsContent>
-
-        <TabsContent value="whatif" className="flex-1 overflow-hidden m-0">
-          <ScrollArea className="h-[calc(100vh-300px)]">
-            <WhatIfPanel data={rawData || []} schema={schema || { columns: [] }} />
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
-    </Card>
+      {activeTab === "whatif" && (
+        <div className="pb-8">
+          <WhatIfPanel 
+            data={rawData || []} 
+            schema={schema || { columns: [] }} 
+            onApplyToPreview={handleApplyToPreview}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
-// Smart Analytics Dialog (for use in header/toolbar)
+// Smart Analytics Dialog
 export function SmartAnalyticsDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
 
@@ -612,22 +922,26 @@ export function SmartAnalyticsDialog({ trigger }: { trigger?: React.ReactNode })
         {trigger || (
           <Button variant="outline" size="sm" className="gap-2">
             <Sparkles className="h-4 w-4" />
-            Insights
+            AI Insights
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Smart Analytics
+      <DialogContent className="max-w-3xl h-[85vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-violet-500/5 to-purple-500/5 shrink-0">
+          <DialogTitle className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
+              <Brain className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <span className="text-xl">Smart Analytics</span>
+              <p className="text-sm font-normal text-muted-foreground">
+                AI-powered insights, forecasting & scenario analysis
+              </p>
+            </div>
           </DialogTitle>
-          <DialogDescription>
-            AI-powered insights, forecasting, and what-if scenario analysis
-          </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-hidden -mx-6 px-6">
-          <SmartAnalyticsPanel />
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <SmartAnalyticsPanel onClose={() => setOpen(false)} />
         </div>
       </DialogContent>
     </Dialog>

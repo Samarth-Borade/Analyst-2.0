@@ -114,6 +114,155 @@ export function analyzeData(data: Record<string, unknown>[]): DataSchema {
   return { columns, rowCount: data.length, summary };
 }
 
+// ============================================
+// FORMULA EVALUATION FOR CALCULATED METRICS
+// ============================================
+
+/**
+ * Extract column names from a formula string
+ * Formula can contain: column names, +, -, *, /, parentheses, numbers
+ * Example: "Cost / Sales" returns ["Cost", "Sales"]
+ * Example: "(Sales - Cost) / Sales * 100" returns ["Sales", "Cost"]
+ */
+export function extractColumnsFromFormula(formula: string, availableColumns: string[]): string[] {
+  // Sort columns by length (longest first) to avoid partial matches
+  const sortedColumns = [...availableColumns].sort((a, b) => b.length - a.length);
+  const foundColumns: string[] = [];
+  
+  let tempFormula = formula;
+  for (const col of sortedColumns) {
+    // Use word boundary matching to avoid partial matches
+    const regex = new RegExp(`\\b${escapeRegex(col)}\\b`, 'g');
+    if (regex.test(tempFormula)) {
+      foundColumns.push(col);
+      // Replace found column with placeholder to avoid re-matching
+      tempFormula = tempFormula.replace(regex, '___COL___');
+    }
+  }
+  
+  return foundColumns;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Evaluate a formula for a single row of data
+ * Supports: column names, +, -, *, /, parentheses, numbers
+ */
+export function evaluateFormulaForRow(
+  formula: string, 
+  row: Record<string, unknown>,
+  availableColumns: string[]
+): number {
+  let expression = formula;
+  
+  // Sort columns by length (longest first) to avoid partial matches
+  const sortedColumns = [...availableColumns].sort((a, b) => b.length - a.length);
+  
+  // Replace column names with their values
+  for (const col of sortedColumns) {
+    const regex = new RegExp(`\\b${escapeRegex(col)}\\b`, 'g');
+    const value = Number(row[col]) || 0;
+    expression = expression.replace(regex, String(value));
+  }
+  
+  // Safely evaluate the expression
+  try {
+    // Only allow numbers, operators, parentheses, and spaces
+    const sanitized = expression.replace(/[^0-9+\-*/().%\s]/g, '');
+    if (sanitized !== expression.trim()) {
+      console.warn("Formula contains invalid characters:", formula);
+      return 0;
+    }
+    // Use Function constructor for safe evaluation (no access to global scope)
+    const result = new Function(`"use strict"; return (${sanitized})`)();
+    return isFinite(result) ? result : 0;
+  } catch (e) {
+    console.warn("Failed to evaluate formula:", formula, e);
+    return 0;
+  }
+}
+
+/**
+ * Aggregate data with a formula calculation
+ * For each group, calculates SUM(numerator) / SUM(denominator) pattern
+ * or evaluates formula on aggregated values
+ */
+export function aggregateDataWithFormula(
+  data: Record<string, unknown>[],
+  groupBy: string,
+  formula: string,
+  formulaLabel: string = "value"
+): { name: string; value: number }[] {
+  // Get all available column names
+  const availableColumns = data.length > 0 ? Object.keys(data[0]) : [];
+  const formulaColumns = extractColumnsFromFormula(formula, availableColumns);
+  
+  if (formulaColumns.length === 0) {
+    console.warn("No valid columns found in formula:", formula);
+    return [];
+  }
+  
+  // Group data and collect raw values for each column
+  const groups = new Map<string, Record<string, number[]>>();
+  
+  data.forEach((row) => {
+    const key = String(row[groupBy] ?? "Unknown");
+    if (!groups.has(key)) {
+      const colValues: Record<string, number[]> = {};
+      formulaColumns.forEach(col => colValues[col] = []);
+      groups.set(key, colValues);
+    }
+    const group = groups.get(key)!;
+    formulaColumns.forEach(col => {
+      group[col].push(Number(row[col]) || 0);
+    });
+  });
+  
+  // Calculate formula result for each group
+  const result: { name: string; value: number }[] = [];
+  
+  groups.forEach((colValues, name) => {
+    // Create a pseudo-row with aggregated (summed) values for formula evaluation
+    const aggregatedRow: Record<string, number> = {};
+    formulaColumns.forEach(col => {
+      aggregatedRow[col] = colValues[col].reduce((a, b) => a + b, 0);
+    });
+    
+    // Evaluate formula with aggregated values
+    const value = evaluateFormulaForRow(formula, aggregatedRow, formulaColumns);
+    result.push({ name, value });
+  });
+  
+  return result.sort((a, b) => b.value - a.value).slice(0, 20);
+}
+
+/**
+ * Calculate a KPI value using a formula
+ */
+export function calculateKPIWithFormula(
+  data: Record<string, unknown>[],
+  formula: string
+): number {
+  const availableColumns = data.length > 0 ? Object.keys(data[0]) : [];
+  const formulaColumns = extractColumnsFromFormula(formula, availableColumns);
+  
+  if (formulaColumns.length === 0) {
+    return 0;
+  }
+  
+  // Aggregate all values first (sum each column)
+  const aggregatedRow: Record<string, number> = {};
+  formulaColumns.forEach(col => {
+    aggregatedRow[col] = data.reduce((sum, row) => sum + (Number(row[col]) || 0), 0);
+  });
+  
+  // Evaluate formula with aggregated values
+  return evaluateFormulaForRow(formula, aggregatedRow, formulaColumns);
+}
+
 export function aggregateData(
   data: Record<string, unknown>[],
   groupBy: string,

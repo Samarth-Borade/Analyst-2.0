@@ -5,15 +5,15 @@ import { ChartRenderer } from "@/components/charts/chart-renderer";
 import { ChartWrapper } from "@/components/charts/chart-wrapper";
 import { DrillDownModal, type DrillDownContext } from "@/components/drill-down-modal";
 import { DashboardStyleDialog } from "@/components/template-picker";
-import { useDashboardStore } from "@/lib/store";
+import { useDashboardStore, type ChartConfig } from "@/lib/store";
 import { useVisualization, useDashboardStyleClasses } from "@/lib/visualization-context";
 import { cn } from "@/lib/utils";
-import { GripVertical, Move, Maximize2, X, Check, Eye, EyeOff, Filter, XCircle } from "lucide-react";
+import { GripVertical, Move, Maximize2, X, Check, Eye, EyeOff, Filter, XCircle, Trash2, Undo2, Beaker, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 export function DashboardCanvas() {
-  const { pages, currentPageId, rawData, filters, setCurrentPage, dataSources, updateChart, updatePage, setFilters } = useDashboardStore();
+  const { pages, currentPageId, rawData, filters, setCurrentPage, dataSources, updateChart, updatePage, setFilters, deleteChart, addChart, whatIfMode, whatIfScenario, exitWhatIfMode } = useDashboardStore();
   const { 
     drillDownContext, 
     openDrillDown, 
@@ -43,6 +43,9 @@ export function DashboardCanvas() {
   
   // Resize preview state
   const [resizePreview, setResizePreview] = useState<{ chartId: string; width: number; height: number } | null>(null);
+  
+  // Undo state for deleted charts
+  const [deletedCharts, setDeletedCharts] = useState<Array<{ chart: ChartConfig; pageId: string; index: number }>>([]);
   
   // Grid ref for calculations
   const gridRef = useRef<HTMLDivElement>(null);
@@ -149,6 +152,12 @@ export function DashboardCanvas() {
   
   // Handle drag start
   const handleDragStart = useCallback((e: React.DragEvent, chartId: string) => {
+    // Don't start drag if clicking on a button or control
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.tagName === 'BUTTON') {
+      e.preventDefault();
+      return;
+    }
     setDraggedChart(chartId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', chartId);
@@ -192,6 +201,51 @@ export function DashboardCanvas() {
     setDraggedChart(null);
     setDragOverIndex(null);
   }, []);
+  
+  // Handle chart deletion with undo support
+  const handleDeleteChart = useCallback((chartId: string) => {
+    if (!currentPageId || !currentPage) return;
+    
+    const chartIndex = currentPage.charts.findIndex(c => c.id === chartId);
+    const chartToDelete = currentPage.charts.find(c => c.id === chartId);
+    
+    if (chartToDelete && chartIndex !== -1) {
+      // Store the deleted chart for undo
+      setDeletedCharts(prev => [...prev, { 
+        chart: chartToDelete, 
+        pageId: currentPageId, 
+        index: chartIndex 
+      }]);
+      
+      // Delete the chart
+      deleteChart(currentPageId, chartId);
+      
+      // Clear selection if this chart was selected
+      if (selectedChartId === chartId) {
+        setSelectedChartId(null);
+      }
+    }
+  }, [currentPageId, currentPage, deleteChart, selectedChartId]);
+  
+  // Handle undo - restore last deleted chart
+  const handleUndo = useCallback(() => {
+    if (deletedCharts.length === 0) return;
+    
+    const lastDeleted = deletedCharts[deletedCharts.length - 1];
+    
+    // Add the chart back
+    addChart(lastDeleted.pageId, lastDeleted.chart);
+    
+    // Remove from deleted charts stack
+    setDeletedCharts(prev => prev.slice(0, -1));
+  }, [deletedCharts, addChart]);
+  
+  // Clear undo stack when exiting edit mode
+  useEffect(() => {
+    if (!editMode) {
+      setDeletedCharts([]);
+    }
+  }, [editMode]);
 
   if (!currentPage) {
     return (
@@ -257,9 +311,27 @@ export function DashboardCanvas() {
           <DashboardStyleDialog />
           
           {editMode && (
-            <span className="text-xs text-muted-foreground font-mono">
-              Drag charts to reorder • Click resize buttons to change size
-            </span>
+            <>
+              {/* Undo Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUndo}
+                disabled={deletedCharts.length === 0}
+                className="gap-2"
+              >
+                <Undo2 className="h-4 w-4" />
+                Undo
+                {deletedCharts.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {deletedCharts.length}
+                  </Badge>
+                )}
+              </Button>
+              <span className="text-xs text-muted-foreground font-mono">
+                Drag charts to reorder • Click resize buttons to change size • Click trash to delete
+              </span>
+            </>
           )}
         </div>
         
@@ -298,6 +370,50 @@ export function DashboardCanvas() {
           )}
         </div>
       </div>
+      
+      {/* What-If Simulation Banner */}
+      {whatIfMode && whatIfScenario && (
+        <div className="px-6 py-3 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+              <Beaker className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-amber-700 dark:text-amber-400">What-If Simulation Active</span>
+                <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400 text-xs">
+                  Preview Mode
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Showing <span className="font-mono font-medium">{whatIfScenario.field}</span> with{" "}
+                <span className={cn(
+                  "font-mono font-medium",
+                  whatIfScenario.changePercent >= 0 ? "text-green-600" : "text-red-600"
+                )}>
+                  {whatIfScenario.changePercent >= 0 ? "+" : ""}{whatIfScenario.changePercent}%
+                </span>{" "}
+                change applied
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+              <span>Data is temporary and not saved</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exitWhatIfMode}
+              className="gap-2 border-amber-500/50 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400"
+            >
+              <X className="h-4 w-4" />
+              Exit Simulation
+            </Button>
+          </div>
+        </div>
+      )}
       
       {/* Charts Grid */}
       <div className="flex-1 p-6 pb-40 overflow-auto dashboard-canvas-content">
@@ -353,6 +469,22 @@ export function DashboardCanvas() {
                     <div className="absolute top-2 left-2 p-1.5 bg-background/90 rounded-md shadow-sm border border-border pointer-events-auto cursor-grab active:cursor-grabbing">
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
                     </div>
+                    
+                    {/* Delete button */}
+                    <button
+                      className="absolute top-2 left-12 p-1.5 bg-destructive/90 hover:bg-destructive rounded-md shadow-sm border border-destructive pointer-events-auto transition-colors z-30"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteChart(chart.id);
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      title="Delete chart"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive-foreground" />
+                    </button>
                     
                     {/* Resize controls */}
                     <div className="absolute top-2 right-2 flex items-center gap-1 pointer-events-auto">

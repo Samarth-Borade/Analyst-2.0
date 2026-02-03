@@ -141,6 +141,9 @@ const updateSchema = z.object({
       titlePosition: z.enum(["top", "bottom"]).optional(),
       xAxis: z.string().optional(),
       yAxis: z.union([z.string(), z.array(z.string())]).optional(),
+      // Axis titles for charts with X and Y axes
+      xAxisTitle: z.string().optional(),
+      yAxisTitle: z.string().optional(),
       groupBy: z.string().optional(),
       aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
       // Trend data for KPI cards
@@ -153,6 +156,9 @@ const updateSchema = z.object({
       sortOrder: z.enum(["asc", "desc"]).optional(),
       filterColumn: z.string().optional(),
       filterValues: z.array(z.string()).optional(),
+      // Formula for calculated metrics (e.g., "Cost / Sales")
+      formula: z.string().optional(),
+      formulaLabel: z.string().optional(),
       width: z.number().optional(),
       height: z.number().optional(),
       x: z.number().optional(),
@@ -187,11 +193,17 @@ const updateSchema = z.object({
       titlePosition: z.enum(["top", "bottom"]).optional(),
       xAxis: z.string().optional(),
       yAxis: z.union([z.string(), z.array(z.string())]).optional(),
+      // Axis titles for charts with X and Y axes
+      xAxisTitle: z.string().optional(),
+      yAxisTitle: z.string().optional(),
       groupBy: z.string().optional(),
       aggregation: z.enum(["sum", "avg", "count", "min", "max"]).optional(),
       // Trend data for KPI cards - LLM should provide realistic values
       trend: z.enum(["up", "down", "flat"]).optional(),
       trendValue: z.number().optional(),
+      // Formula for calculated metrics (e.g., "Cost / Sales")
+      formula: z.string().optional(),
+      formulaLabel: z.string().optional(),
       // Columns to display in table (array of column names)
       columns: z.array(z.string()).optional(),
       width: z.number().default(2),
@@ -477,9 +489,11 @@ For adding a new chart:
   "newChart": {
     "id": "chart-xyz123",
     "type": "bar",
-    "title": "Descriptive Chart Title",
-    "xAxis": "column_name",
-    "yAxis": "column_name",
+    "title": "Sales by Region",
+    "xAxis": "Region",
+    "yAxis": "Sales",
+    "xAxisTitle": "Region",
+    "yAxisTitle": "Total Sales ($)",
     "aggregation": "sum",
     "width": 2,
     "height": 2,
@@ -488,6 +502,14 @@ For adding a new chart:
   },
   "message": "Added a bar chart showing..."
 }
+
+IMPORTANT - CHART TITLES AND AXIS LABELS:
+- ALWAYS generate a meaningful, descriptive title for every chart (NEVER use generic titles like "New Chart" or "Chart 1")
+- Title should describe what the chart shows (e.g., "Sales by Region", "Monthly Revenue Trend", "Customer Distribution by Segment")
+- For charts with X and Y axes (bar, line, area, scatter, bubble, histogram, waterfall, combo, box-plot), ALWAYS include xAxisTitle and yAxisTitle
+- xAxisTitle should describe what the X-axis represents (e.g., "Region", "Month", "Product Category")
+- yAxisTitle should describe what the Y-axis represents with units if applicable (e.g., "Revenue ($)", "Count", "Sales Volume")
+- Make titles human-readable and informative, not just column names
 
 For updating a chart (including sorting and filtering):
 {
@@ -658,6 +680,93 @@ IMPORTANT FOR KPI CARDS:
 - When adding or updating a KPI card, ALWAYS include "trend" ("up", "down", or "flat") and "trendValue" (number like 8.5 for 8.5%)
 - Analyze the data context to determine realistic trend values
 - trendValue should be a reasonable percentage (typically 0-30%)
+- KPI cards can also use formulas for calculated metrics (see CALCULATED METRICS section)
+
+=== CALCULATED METRICS & FORMULAS (CRITICAL) ===
+When a user asks for metrics that require calculations involving MULTIPLE columns, you MUST use the "formula" property.
+This is like DAX measures in Power BI - it allows you to create calculated metrics on-the-fly.
+
+WHEN TO USE FORMULAS:
+- "cost per sale" → formula: "Cost / Sales"
+- "profit margin" → formula: "(Sales - Cost) / Sales * 100" or formula: "Profit / Sales * 100"
+- "average price per unit" → formula: "Sales / Quantity"
+- "cost per unit" → formula: "Cost / Quantity"
+- "revenue per customer" → formula: "Sales / Customer Count" (if applicable columns exist)
+- "return rate" → formula: "Returns / Quantity * 100"
+- "discount impact" → formula: "Discount * Sales"
+- Any metric that involves division, multiplication, or combination of columns
+
+FORMULA SYNTAX:
+- Use exact column names from the dataset (case-sensitive)
+- Supported operators: +, -, *, /, parentheses ()
+- Numbers are allowed: "Profit * 100", "Sales / 1000"
+- Always group by the dimension specified in xAxis
+
+FORMULA EXAMPLES:
+1. "Show cost per sales by salesperson":
+{
+  "action": "add_chart",
+  "newChart": {
+    "id": "chart-cost-per-sales",
+    "type": "bar",
+    "title": "Cost Per Sales by Salesperson",
+    "xAxis": "Salesperson",
+    "formula": "Cost / Sales",
+    "formulaLabel": "Cost Per Sale ($)",
+    "xAxisTitle": "Salesperson",
+    "yAxisTitle": "Cost Per Sale ($)",
+    "width": 2,
+    "height": 2,
+    "x": 0,
+    "y": 0
+  }
+}
+
+2. "Create a KPI showing overall profit margin":
+{
+  "action": "add_chart",
+  "newChart": {
+    "id": "chart-profit-margin-kpi",
+    "type": "kpi",
+    "title": "Profit Margin",
+    "formula": "(Sales - Cost) / Sales * 100",
+    "formulaLabel": "Profit Margin %",
+    "trend": "up",
+    "trendValue": 5.2,
+    "width": 1,
+    "height": 1,
+    "x": 0,
+    "y": 0
+  }
+}
+
+3. "Line chart of profit margin over time by date":
+{
+  "action": "add_chart",
+  "newChart": {
+    "id": "chart-profit-trend",
+    "type": "line",
+    "title": "Profit Margin Trend Over Time",
+    "xAxis": "Date",
+    "formula": "(Sales - Cost) / Sales * 100",
+    "formulaLabel": "Profit Margin %",
+    "xAxisTitle": "Date",
+    "yAxisTitle": "Profit Margin %",
+    "width": 2,
+    "height": 2,
+    "x": 0,
+    "y": 0
+  }
+}
+
+IMPORTANT FORMULA RULES:
+- When using formula, you do NOT need to set yAxis (the formula replaces it)
+- ALWAYS set formulaLabel to a human-readable description of what the formula calculates
+- The formula is evaluated per group (grouped by xAxis), so "Cost / Sales" means SUM(Cost) / SUM(Sales) for each group
+- Column names in formula MUST match exactly with available columns (case-sensitive)
+- If the user asks for something like "cost per sale", "revenue per unit", "margin", "ratio", "rate", or any calculation involving multiple columns - USE FORMULA
+
+=== END CALCULATED METRICS ===
 
 IMPORTANT FOR TABLE CHARTS:
 - Use the "columns" property (array of column names) to specify which columns to display
@@ -669,6 +778,8 @@ IMPORTANT FOR TABLE CHARTS:
 
 CRITICAL RULES:
 - When action is "add_chart", you MUST include a complete newChart object with ALL required fields: id, type, title, width, height, x, y
+- ALWAYS provide a descriptive, meaningful title for EVERY chart - NEVER use generic titles like "New Chart", "Chart 1", or just the column name
+- For charts with axes (bar, line, area, scatter, etc.), ALWAYS include xAxisTitle and yAxisTitle with human-readable labels
 - When action is "add_page", generate a new page with an appropriate descriptive name based on the data (e.g., "Sales Analysis", "Regional Performance", "Trends")
 - When user asks to sort/order a table:
   * Look at "Available Column Names" and find the column that matches the user's request (case-insensitive matching)
@@ -757,6 +868,25 @@ Example - Create calculated column:
     "formula": "Profit / Sales * 100"
   },
   "message": "Created calculated column 'Profit_Margin' = Profit / Sales * 100"
+}
+
+IMPORTANT - ADDING CALCULATED COLUMNS TO TABLES:
+When user asks to "add a column" to a table with a calculation (like "cost per sale", "profit margin", etc.):
+1. Use action: "transform_data" with operation: "create_calculated"
+2. The newName should be descriptive (e.g., "Cost_Per_Sales", "Profit_Margin")
+3. The formula should use exact column names from the dataset
+4. After the column is created, the user can add it to the table's columns array
+
+Example - Add "Cost Per Sales" column to a table:
+{
+  "action": "transform_data",
+  "dataTransform": {
+    "operation": "create_calculated",
+    "newName": "Cost_Per_Sales",
+    "formula": "Cost / Sales"
+  },
+  "message": "Created a 'Cost_Per_Sales' column calculated as Cost / Sales. The values are rounded to 2 decimal places. You can now add this column to any table.",
+  "suggestedQuestions": ["Show Cost_Per_Sales in the table", "Create a chart with Cost_Per_Sales"]
 }
 
 === DATA RELATIONSHIPS ===
@@ -851,7 +981,7 @@ Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
     const inputTokens = estimateTokens(systemPrompt);
 
     const { text } = await generateText({
-      model: groq("llama-3.3-70b-versatile"),
+      model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
       prompt: systemPrompt,
     });
 
@@ -863,7 +993,7 @@ Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
-      model: 'llama-3.3-70b-versatile',
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       latencyMs: Date.now() - startTime,
     });
 

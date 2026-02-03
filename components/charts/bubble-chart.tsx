@@ -99,6 +99,10 @@ export function BubbleChartComponent({ config, data }: BubbleChartProps) {
   const isZoomed = xRange[0] > 0 || xRange[1] < 100 || yRange[0] > 0 || yRange[1] < 100;
   const titlePosition = config.titlePosition || "top";
   
+  // Generate axis titles from column names if not provided
+  const xAxisTitle = config.xAxisTitle || config.xAxis;
+  const yAxisTitle = config.yAxisTitle || yMetric;
+  
   const resetZoom = () => {
     setXRange([0, 100]);
     setYRange([0, 100]);
@@ -119,7 +123,7 @@ export function BubbleChartComponent({ config, data }: BubbleChartProps) {
           {/* Main chart area */}
           <div className="flex-1 flex flex-col">
             <ResponsiveContainer width="100%" height={180}>
-              <ScatterChart margin={{ left: 0, right: 10, top: 10, bottom: 0 }}>
+              <ScatterChart margin={{ left: 10, right: 10, top: 10, bottom: 20 }}>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="currentColor"
@@ -135,6 +139,7 @@ export function BubbleChartComponent({ config, data }: BubbleChartProps) {
                   axisLine={false}
                   className="text-muted-foreground fill-muted-foreground"
                   allowDataOverflow
+                  label={{ value: xAxisTitle, position: 'bottom', offset: 5, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 />
                 <YAxis
                   type="number"
@@ -146,6 +151,7 @@ export function BubbleChartComponent({ config, data }: BubbleChartProps) {
                   axisLine={false}
                   className="text-muted-foreground fill-muted-foreground"
                   allowDataOverflow
+                  label={{ value: yAxisTitle, angle: -90, position: 'insideLeft', offset: 5, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 />
                 <ZAxis type="number" dataKey="z" range={[50, 400]} domain={[minZ, maxZ]} />
                 <Tooltip
@@ -157,6 +163,8 @@ export function BubbleChartComponent({ config, data }: BubbleChartProps) {
                     fontSize: "12px",
                     color: "hsl(var(--popover-foreground))",
                   }}
+                  labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+                  itemStyle={{ color: "hsl(var(--popover-foreground))" }}
                   formatter={(value: number, name: string) => [
                     value.toLocaleString(),
                     name === "x" ? config.xAxis : name === "y" ? yMetric : sizeMetric,

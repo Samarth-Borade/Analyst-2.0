@@ -114,6 +114,8 @@ export function RibbonChartComponent({ config, data }: RibbonChartProps) {
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
               formatter={(value: number, name: string) => [
                 value.toLocaleString(),
                 name,

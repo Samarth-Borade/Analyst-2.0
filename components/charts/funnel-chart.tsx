@@ -61,6 +61,8 @@ export function FunnelChartComponent({ config, data }: FunnelChartProps) {
                 fontSize: "12px",
                 color: "hsl(var(--popover-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
             />
             <Funnel dataKey="value" data={chartData} isAnimationActive>
               {chartData.map((entry, index) => (
