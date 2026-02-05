@@ -981,7 +981,7 @@ Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
     const inputTokens = estimateTokens(systemPrompt);
 
     const { text } = await generateText({
-      model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
+      model: groq("llama-3.3-70b-versatile"),
       prompt: systemPrompt,
     });
 
@@ -993,7 +993,7 @@ Return ONLY valid JSON, no markdown, no explanation, no code blocks.`;
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      model: 'llama-3.3-70b-versatile',
       latencyMs: Date.now() - startTime,
     });
 
