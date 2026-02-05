@@ -200,9 +200,9 @@ export function DashboardHeader({ onReset }: DashboardHeaderProps) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">AI</span>
+              <span className="text-primary-foreground font-bold text-sm">D</span>
             </div>
-            <span className="font-semibold text-foreground font-mono">AI Analyst</span>
+            <span className="font-semibold text-foreground font-mono">DashExAI</span>
           </div>
           {fileName && (
             <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground font-mono">
