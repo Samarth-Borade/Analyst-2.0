@@ -140,7 +140,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>Welcome to AI Analyst</DialogTitle>
+          <DialogTitle>Welcome to DashExAI</DialogTitle>
           <DialogDescription>
             Sign in to save your dashboards and sync across devices
           </DialogDescription>

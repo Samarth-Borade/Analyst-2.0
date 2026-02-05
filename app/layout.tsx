@@ -11,7 +11,7 @@ const _inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: 'AI Analyst - AI-Powered Analytics Platform',
+  title: 'DashExAI - AI-Powered Analytics Platform',
   description: 'Upload data, generate insights, and build dashboards with AI',
   generator: 'v0.app',
   icons: {

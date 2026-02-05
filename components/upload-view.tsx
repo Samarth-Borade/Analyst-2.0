@@ -31,7 +31,7 @@ export function UploadView({ onUploadComplete, onBack }: UploadViewProps) {
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-sm">AI</span>
             </div>
-            <span className="font-semibold text-foreground">AI Analyst</span>
+            <span className="font-semibold text-foreground">DashExAI</span>
           </div>
         </div>
         <Button variant="ghost" size="icon" onClick={toggleTheme}>

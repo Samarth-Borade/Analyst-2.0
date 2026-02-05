@@ -75,7 +75,7 @@ export function HomeView() {
           </div>
           <div>
             <h1 className="font-semibold text-foreground font-mono text-lg tracking-tight">
-              AI Analyst
+              DashExAI
             </h1>
             <p className="text-xs text-muted-foreground">
               AI-Powered Analytics Platform
